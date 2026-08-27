@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+        />
+        <title>Tester</title>
+        <style>
+            html,
+            body {
+                margin: 0;
+                /* 100vh alone leaves a gap on mobile browsers when the
+                   address bar shows/hides; 100dvh tracks the real visible
+                   viewport. dvh isn't supported on older browsers, so it's
+                   layered after the vh fallback rather than replacing it. */
+                height: 100vh;
+                height: 100dvh;
+            }
+
+            iframe {
+                display: block;
+                border: 0;
+            }
+        </style>
+    </head>
+    <body>
+        <iframe
+            id="viewer"
+            width="100%"
+            height="100%"
+            allow="fullscreen; xr-spatial-tracking"
+            src="https://superspl.at/s?id=e2aebac9"
+        ></iframe>
+    </body>
+</html>

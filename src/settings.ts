@@ -1,0 +1,147 @@
+import type { ExperienceSettings as V1, AnimTrack as AnimTrackV1 } from './schemas/v1';
+import { validateV1 } from './schemas/v1';
+import type { ExperienceSettings as V2, AnimTrack as AnimTrackV2 } from './schemas/v2';
+import { validateV2 } from './schemas/v2';
+import { assertObject } from './schemas/validate-utils';
+
+const migrateV1 = (settings: V1): V1 => {
+    if (settings.animTracks) {
+        settings.animTracks?.forEach((track: AnimTrackV1) => {
+            // some early settings did not have frameRate set on anim tracks
+            if (!track.frameRate) {
+                const defaultFrameRate = 30;
+
+                track.frameRate = defaultFrameRate;
+                const times = track.keyframes.times;
+                for (let i = 0; i < times.length; i++) {
+                    times[i] *= defaultFrameRate;
+                }
+            }
+
+            // smoothness property added in v1.4.0
+            // eslint-disable-next-line no-prototype-builtins -- preserve property lookup semantics
+            if (!track.hasOwnProperty('smoothness')) {
+                track.smoothness = 0;
+            }
+        });
+    } else {
+        // some scenes were published without animTracks
+        settings.animTracks = [];
+    }
+
+    return settings;
+};
+
+const migrateAnimTrackV2 = (animTrackV1: AnimTrackV1, fov: number): AnimTrackV2 => {
+    return {
+        name: animTrackV1.name,
+        duration: animTrackV1.duration,
+        frameRate: animTrackV1.frameRate,
+        loopMode: animTrackV1.loopMode,
+        interpolation: animTrackV1.interpolation,
+        smoothness: animTrackV1.smoothness,
+        keyframes: {
+            times: animTrackV1.keyframes.times,
+            values: {
+                position: animTrackV1.keyframes.values.position,
+                target: animTrackV1.keyframes.values.target,
+                fov: new Array(animTrackV1.keyframes.times.length).fill(fov)
+            }
+        }
+    };
+};
+
+const migrateV2 = (v1: V1): V2 => {
+    return {
+        version: 2,
+        tonemapping: 'none',
+        highPrecisionRendering: false,
+        background: {
+            color: (v1.background.color as [number, number, number]) || [0, 0, 0]
+        },
+        postEffectSettings: {
+            sharpness: {
+                enabled: false,
+                amount: 0
+            },
+            bloom: {
+                enabled: false,
+                intensity: 1,
+                blurLevel: 2
+            },
+            grading: {
+                enabled: false,
+                brightness: 0,
+                contrast: 1,
+                saturation: 1,
+                tint: [1, 1, 1]
+            },
+            vignette: {
+                enabled: false,
+                intensity: 0.5,
+                inner: 0.3,
+                outer: 0.75,
+                curvature: 1
+            },
+            fringing: {
+                enabled: false,
+                intensity: 0.5
+            }
+        },
+        animTracks: v1.animTracks.map((animTrackV1: AnimTrackV1) => {
+            return migrateAnimTrackV2(animTrackV1, v1.camera.fov || 60);
+        }),
+        cameras:
+            v1.camera.position && v1.camera.target
+                ? [
+                      {
+                          initial: {
+                              position: v1.camera.position as [number, number, number],
+                              target: v1.camera.target as [number, number, number],
+                              fov: v1.camera.fov || 75
+                          }
+                      }
+                  ]
+                : [],
+        annotations: [],
+        startMode: v1.camera.startAnim === 'animTrack' ? 'animTrack' : 'default'
+    };
+};
+
+// migrate a JSON object to the latest settings schema (assumes valid input)
+const importSettings = (settings: unknown): V2 => {
+    let result: V2;
+
+    const version = (settings as { version?: unknown }).version;
+    if (version === undefined) {
+        // v1 -> v2
+        result = migrateV2(migrateV1(settings as V1));
+    } else if (version === 2) {
+        // already v2
+        result = settings as V2;
+    } else {
+        throw new Error(`Unsupported experience settings version: ${version}`);
+    }
+
+    return result;
+};
+
+// validate unknown data against any supported settings schema version, throwing on invalid input
+const validateSettings = (settings: unknown): void => {
+    const obj = assertObject(settings, 'settings');
+    const version = obj.version;
+
+    if (version === undefined) {
+        validateV1(settings);
+    } else if (version === 2) {
+        validateV2(settings);
+    } else if (typeof version !== 'number') {
+        throw new Error(`settings.version must be a number, got ${typeof version}`);
+    } else {
+        throw new Error(`Unsupported experience settings version: ${version}`);
+    }
+};
+
+export type { AnimTrack, Camera, Annotation, PostEffectSettings, ExperienceSettings } from './schemas/v2';
+
+export { importSettings, validateSettings };
