@@ -201,11 +201,6 @@ fn vertexMain(input: VertexInput) -> VertexOutput {
 `;
 
 // WGSL has no texture2DProj equivalent, so the perspective divide is explicit.
-// WebGPU's texture V axis runs opposite to WebGL's (this reflection render
-// target was rasterized under whichever convention the engine used to render
-// into it), so the projected V has to be flipped here to land on the same
-// texel GLSL/WebGL reaches with the same texMatrix - otherwise the reflection
-// comes out correctly placed and framed but upside down.
 export const MIRROR_SURFACE_FRAGMENT_WGSL = `
 var uReflectionTex: texture_2d<f32>;
 var uReflectionTexSampler: sampler;
@@ -215,7 +210,7 @@ varying vProjCoord: vec4f;
 fn fragmentMain(input: FragmentInput) -> FragmentOutput {
     var output: FragmentOutput;
     let proj = input.vProjCoord.xy / input.vProjCoord.w;
-    let refl = textureSample(uReflectionTex, uReflectionTexSampler, vec2f(proj.x, 1.0 - proj.y));
+    let refl = textureSample(uReflectionTex, uReflectionTexSampler, proj);
     output.color = vec4f(refl.rgb * uniform.uReflectivity, 1.0);
     return output;
 }

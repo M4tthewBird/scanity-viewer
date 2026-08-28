@@ -165,7 +165,14 @@ const makeRenderTarget = (device: GraphicsDevice): RenderTarget => {
         addressU: ADDRESS_CLAMP_TO_EDGE,
         addressV: ADDRESS_CLAMP_TO_EDGE
     });
-    return new RenderTarget({ colorBuffer, depth: true, samples: 1 });
+    // WebGPU and WebGL disagree on which end of a render target is row 0. The
+    // engine's own renderer already knows this and will pre-flip the
+    // rendering camera's projection matrix (Camera.applyShaderProjectionTransform)
+    // whenever a target is marked flipY - that corrects the content at the
+    // point it's rasterized, upstream of our own hand-built projective
+    // texMatrix, so the mirror-surface shader's sampling code (matched to the
+    // original WebGL-only tool) doesn't need to know about it at all.
+    return new RenderTarget({ colorBuffer, depth: true, samples: 1, flipY: device.isWebGPU });
 };
 
 // r = v - 2(v.n)n
