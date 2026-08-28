@@ -722,6 +722,10 @@
 						</button>
 					</div>
 					<div class="placeHint" id="placeHint"></div>
+					<div class="tabSectionCategoryLabel">Export</div>
+					<div class="btn-row">
+						<button id="btnExportMirrors" class="atlux-btn--action">Export mirrors.json</button>
+					</div>
 				</div>
 				<div class="atlux-tooltip">
 					<button class="atlux-tooltip-btn" aria-label="Info">i</button>
@@ -734,6 +738,7 @@
 							<li>New portals are mirrors; switch one to a window with <b>Type</b> in Portal Settings.</li>
 							<li>Click a portal in the list to select and frame it; the eye toggle hides or shows it.</li>
 							<li><b>Ctrl+C / Ctrl+V</b> copy and duplicate the selected portal; <b>Delete</b> removes it.</li>
+							<li><b>Export mirrors.json</b> downloads every <b>mirror</b> portal's transform and shape as a JSON file (window portals are skipped) - point a viewer's own renderer at this file to reproduce the mirrors without this tool.</li>
 						</ul>
 					</div>
 				</div>
@@ -3448,6 +3453,42 @@ async function publish() {
 }
 // publish() is intentionally unreferenced - see the section header above.
 // Restore with: document.getElementById("btnPublish").addEventListener("click", publish);
+
+// ── Export mirrors.json ─────────────────────────────────────────────────
+// A simpler sibling to publish(): no upload endpoint, no embed link - just a
+// plain JSON download of every MIRROR portal's transform + shape (window
+// portals are skipped; a viewer that only implements mirrors has no use for
+// them). Quaternion rather than Euler, same reasoning as serializeScene() -
+// no gimbal ambiguity, and it round-trips straight into entity.setRotation().
+function exportMirrorsJSON() {
+	const r = (v) => +Number(v).toFixed(4);
+	const data = mirrors
+		.filter((m) => (m.config.type || "mirror") !== "window")
+		.map((m) => {
+			const p = m.ent.getPosition(), q = m.ent.getRotation(), s = m.ent.getLocalScale();
+			return {
+				shape: m.config.shape,                          // "circle" | "rect" | "capsule"
+				position: [r(p.x), r(p.y), r(p.z)],
+				rotation: [r(q.x), r(q.y), r(q.z), r(q.w)],      // quaternion, xyzw
+				scale: [r(s.x), r(s.y), r(s.z)],
+				radius: m.config.radius,                          // full width for rect, cap radius for capsule
+				height: m.config.height ?? null,                  // full height for rect/capsule, null for circle
+				cullFront: m.cullFront,
+				cullBack: m.cullBack,
+				enabled: !!m.config.enabled,
+			};
+		});
+	const blob = new Blob([JSON.stringify({ mirrors: data }, null, 2)], { type: "application/json" });
+	const url = URL.createObjectURL(blob);
+	const a = document.createElement("a");
+	a.href = url;
+	a.download = "mirrors.json";
+	document.body.appendChild(a);
+	a.click();
+	a.remove();
+	URL.revokeObjectURL(url);
+}
+document.getElementById("btnExportMirrors").addEventListener("click", exportMirrorsJSON);
 
 // Embed / viewer mode: read the scene from the URL and hide the UI.
 const _urlParams = new URLSearchParams(location.search);
