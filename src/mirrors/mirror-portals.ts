@@ -165,14 +165,14 @@ const makeRenderTarget = (device: GraphicsDevice): RenderTarget => {
         addressU: ADDRESS_CLAMP_TO_EDGE,
         addressV: ADDRESS_CLAMP_TO_EDGE
     });
-    // WebGPU and WebGL disagree on which end of a render target is row 0. The
-    // engine's own renderer already knows this and will pre-flip the
-    // rendering camera's projection matrix (Camera.applyShaderProjectionTransform)
-    // whenever a target is marked flipY - that corrects the content at the
-    // point it's rasterized, upstream of our own hand-built projective
-    // texMatrix, so the mirror-surface shader's sampling code (matched to the
-    // original WebGL-only tool) doesn't need to know about it at all.
-    return new RenderTarget({ colorBuffer, depth: true, samples: 1, flipY: device.isWebGPU });
+    // TEMPORARY: flipY pulled back out to isolate it as a variable while
+    // debugging the dumbbell-rack smearing and the cross-room reflection
+    // leak - both only showed up once this was in place, and flipY also
+    // feeds the gsplat renderer's own per-camera inverse-projection math
+    // (gsplat-hybrid-renderer.js), not just our own texMatrix, so it's a
+    // real suspect for both. This intentionally brings back the upside-down
+    // reflection so we can check whether the other two symptoms improve.
+    return new RenderTarget({ colorBuffer, depth: true, samples: 1 });
 };
 
 // r = v - 2(v.n)n
