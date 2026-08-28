@@ -30,6 +30,7 @@ import {
     Vec3,
     ADDRESS_CLAMP_TO_EDGE,
     CULLFACE_NONE,
+    FILTER_LINEAR,
     FILTER_NEAREST,
     PIXELFORMAT_RGBA32F,
     PIXELFORMAT_RGBA8,
@@ -159,8 +160,8 @@ const makeRenderTarget = (device: GraphicsDevice): RenderTarget => {
         height: Math.max(1, Math.floor(device.height)),
         format: PIXELFORMAT_RGBA8,
         mipmaps: false,
-        minFilter: FILTER_NEAREST,
-        magFilter: FILTER_NEAREST,
+        minFilter: FILTER_LINEAR,
+        magFilter: FILTER_LINEAR,
         addressU: ADDRESS_CLAMP_TO_EDGE,
         addressV: ADDRESS_CLAMP_TO_EDGE
     });
