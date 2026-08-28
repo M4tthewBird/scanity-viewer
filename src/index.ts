@@ -18,6 +18,8 @@ import { MeshCollision, loadVoxelCollision } from './collision';
 import type { Collision } from './collision';
 import { observe } from './core/observe';
 import { initLocalization } from './localization';
+import { loadMirrors } from './mirrors/mirror-portals';
+import type { MirrorConfig } from './mirrors/types';
 import { importSettings } from './settings';
 import type { Config, Global, State } from './types';
 import { initPoster, initUI } from './ui';
@@ -333,6 +335,14 @@ const main = async (canvas: HTMLCanvasElement, settingsJson: unknown, config: Co
         }
     }
 
+    // Load mirror portal definitions (see /splat-portal-mirror-tool)
+    const mirrorsLoad: Promise<MirrorConfig[]> = config.mirrorsUrl
+        ? loadMirrors(config.mirrorsUrl).catch((err: Error): MirrorConfig[] => {
+              console.warn('Failed to load mirrors.json:', err);
+              return [];
+          })
+        : Promise.resolve([]);
+
     // Load and play sound
     if (global.settings.soundUrl) {
         const sound = new Audio(global.settings.soundUrl);
@@ -352,7 +362,7 @@ const main = async (canvas: HTMLCanvasElement, settingsJson: unknown, config: Co
     }
 
     // Create the viewer
-    return new Viewer(global, gsplatLoad, skyboxLoad, collisionLoad);
+    return new Viewer(global, gsplatLoad, skyboxLoad, collisionLoad, mirrorsLoad);
 };
 
 console.log(`Scanity Viewer v${appVersion} | Engine v${engineVersion} (${engineRevision})`);

@@ -13,6 +13,7 @@ type Config = {
     contentUrl?: string;
     contents?: Promise<Response>;
     collisionUrl?: string;
+    mirrorsUrl?: string;
 
     noui: boolean;
     noanim: boolean;

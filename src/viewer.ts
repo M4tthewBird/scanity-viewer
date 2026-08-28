@@ -34,6 +34,8 @@ import { nearlyEquals } from './core/math';
 import { DebugPanel } from './debug';
 import { InputController } from './input-controller';
 import { MeshDebugOverlay } from './mesh-debug-overlay';
+import { MirrorPortals } from './mirrors/mirror-portals';
+import type { MirrorConfig } from './mirrors/types';
 import { NavCursor } from './nav-cursor';
 import { Picker } from './picker';
 import type { ExperienceSettings, PostEffectSettings } from './settings';
@@ -165,6 +167,8 @@ class Viewer {
 
     debugPanel: DebugPanel | null = null;
 
+    mirrorPortals: MirrorPortals | null = null;
+
     origChunks: {
         glsl: {
             gsplatOutputVS: string;
@@ -180,7 +184,8 @@ class Viewer {
         global: Global,
         gsplatLoad: Promise<Entity>,
         skyboxLoad: Promise<void> | undefined,
-        collisionLoad: Promise<Collision> | undefined
+        collisionLoad: Promise<Collision> | undefined,
+        mirrorsLoad: Promise<MirrorConfig[]>
     ) {
         this.global = global;
 
@@ -320,6 +325,7 @@ class Viewer {
         // Render voxel debug overlay
         app.on('prerender', () => {
             this.voxelOverlay?.update();
+            this.mirrorPortals?.update();
         });
 
         // update state on first frame
@@ -403,9 +409,10 @@ class Viewer {
         }
 
         // wait for the model to load
-        Promise.all([gsplatLoad, skyboxLoad, collisionLoad]).then((results) => {
+        Promise.all([gsplatLoad, skyboxLoad, collisionLoad, mirrorsLoad]).then((results) => {
             const gsplatComponent = results[0].gsplat as GSplatComponent;
             const collision = results[2];
+            const mirrors = results[3];
 
             // get scene bounding box
             const gsplatBbox = gsplatComponent.customAabb;
@@ -475,6 +482,10 @@ class Viewer {
             }
 
             this.debugPanel = new DebugPanel(global, this.cameraManager);
+
+            if (mirrors.length > 0) {
+                this.mirrorPortals = new MirrorPortals(app, camera, mirrors);
+            }
 
             const { gsplat } = app.scene;
 

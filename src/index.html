@@ -127,12 +127,35 @@
                     return found || undefined;
                 };
 
+                // Same auto-detection convention as collision.glb — a literal
+                // "mirrors.json" in the scene folder, cache included.
+                const resolveMirrorsUrl = async (folder, sceneId) => {
+                    const cacheKey = `mirrorsUrl:${sceneId}`;
+                    const cached = localStorage.getItem(cacheKey);
+                    if (cached !== null) {
+                        return cached || undefined;
+                    }
+
+                    const candidateUrl = `${folder}/mirrors.json`;
+                    let found;
+                    try {
+                        const response = await fetch(candidateUrl, { method: 'HEAD' });
+                        found = response.ok ? candidateUrl : '';
+                    } catch {
+                        found = '';
+                    }
+                    localStorage.setItem(cacheKey, found);
+                    return found || undefined;
+                };
+
                 const posterUrl = url.searchParams.get('poster') ?? (sceneFolder ? `${sceneFolder}/poster.jpg` : null);
                 const skyboxUrl = url.searchParams.get('skybox');
                 const collisionUrl =
                     url.searchParams.get('collision') ??
                     url.searchParams.get('voxel') ??
                     (sceneFolder ? await resolveCollisionUrl(sceneFolder, id) : undefined);
+                const mirrorsUrl =
+                    url.searchParams.get('mirrors') ?? (sceneFolder ? await resolveMirrorsUrl(sceneFolder, id) : undefined);
                 const settingsUrl = url.searchParams.has('settings')
                     ? url.searchParams.get('settings')
                     : sceneFolder
@@ -153,6 +176,7 @@
                     poster: posterUrl && createImage(posterUrl),
                     skyboxUrl,
                     collisionUrl,
+                    mirrorsUrl,
                     contentUrl,
                     contents: fetch(contentUrl),
                     noui: url.searchParams.has('noui'),
