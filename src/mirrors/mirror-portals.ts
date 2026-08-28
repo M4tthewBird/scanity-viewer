@@ -420,6 +420,15 @@ class MirrorPortals {
             const b5 = (5 * MAX_MIRRORS + idx) * 4;
             this.dataArray[b5] = halfT;
             this.dataArray[b5 + 1] = offset;
+
+            // World-space plane (normal, d) the reflection-clip pass uses to
+            // tell a reflection camera's own render apart from the main
+            // camera's, and to discard splats on the wrong side of it.
+            const b6 = (6 * MAX_MIRRORS + idx) * 4;
+            this.dataArray[b6] = normal.x;
+            this.dataArray[b6 + 1] = normal.y;
+            this.dataArray[b6 + 2] = normal.z;
+            this.dataArray[b6 + 3] = -normal.dot(worldPos);
         }
 
         if (this.cullReady) {
@@ -428,6 +437,7 @@ class MirrorPortals {
             const scope = this.app.graphicsDevice.scope;
             scope.resolve('uMirrorData').setValue(this.dataTexture);
             scope.resolve('uMirrorCount').setValue(this.instances.length);
+            scope.resolve('uMainCamPos').setValue([camPos.x, camPos.y, camPos.z]);
         }
 
         this.app.renderNextFrame = true;

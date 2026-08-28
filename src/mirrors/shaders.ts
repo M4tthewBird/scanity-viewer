@@ -11,8 +11,9 @@
 //   rows 0-3: the 4 columns of the mirror's world -> local inverse matrix
 //   row 4:    (shape [0=circle,1=rect,2=capsule], radius, capHalfHeight, enabled)
 //   row 5:    (cullHalfThickness, cullOffset, unused, unused)
+//   row 6:    the mirror's world-space plane (normal.xyz, d)
 export const MAX_MIRRORS = 8;
-export const MIRROR_DATA_ROWS = 6;
+export const MIRROR_DATA_ROWS = 7;
 
 // A thin soft-edged slab is carved out of the splats along each mirror's
 // local Z (its normal) between cullFront and cullBack, so the portal mesh has
@@ -25,6 +26,8 @@ export const MIRROR_CULL_GLSL = `
 
 uniform sampler2D uMirrorData;
 uniform float uMirrorCount;
+uniform vec3 uMainCamPos;
+uniform vec3 view_position;
 
 float gMirrorKeep = 1.0;
 
@@ -63,6 +66,45 @@ float mirrorHoleKeep(float i, vec3 worldCenter) {
     return 1.0 - slab * inside;
 }
 
+// During a reflection camera's own render pass (identified below), discard
+// anything on the far side of the mirror it's reflecting - otherwise the
+// reflected eye position (mirrored across the mirror's plane) can land near
+// or inside completely different geometry - another room, the far side of
+// the same wall - and that leaks into the reflection instead of whatever's
+// actually in front of the mirror.
+float reflectionClipKeep(vec3 center) {
+    float best = -1.0;
+    float bestD = 1e9;
+    for (int i = 0; i < MAX_MIRRORS; i++) {
+        if (float(i) >= uMirrorCount) {
+            break;
+        }
+        vec4 shapeParams = mirrorTexel(float(i), 4.0);
+        if (shapeParams.w < 0.5) {
+            continue;
+        }
+        vec4 plane = mirrorTexel(float(i), 6.0);
+        float dMain = dot(plane.xyz, uMainCamPos) + plane.w;
+        vec3 reflectedCamPos = uMainCamPos - 2.0 * dMain * plane.xyz;
+        float d = distance(reflectedCamPos, view_position);
+        if (d < bestD) {
+            bestD = d;
+            best = float(i);
+        }
+    }
+    // A reflection camera sits exactly at its mirror's reflected-camera
+    // position (bestD ~ 0) but far from the main camera; the main camera's
+    // own pass matches no mirror's reflected position at all, so it never
+    // clips regardless of where it stands relative to any mirror.
+    float distToMain = distance(view_position, uMainCamPos);
+    if (best < 0.0 || bestD >= distToMain) {
+        return 1.0;
+    }
+    vec4 plane = mirrorTexel(best, 6.0);
+    float side = dot(plane.xyz, center) + plane.w;
+    return step(0.0, side);
+}
+
 void modifySplatCenter(inout vec3 center) {
     float keep = 1.0;
     for (int i = 0; i < MAX_MIRRORS; i++) {
@@ -71,6 +113,7 @@ void modifySplatCenter(inout vec3 center) {
         }
         keep *= mirrorHoleKeep(float(i), center);
     }
+    keep *= reflectionClipKeep(center);
     gMirrorKeep = keep;
 }
 
@@ -97,6 +140,8 @@ const MIRROR_CULL_SOFT: f32 = ${CULL_SOFT};
 var uMirrorData: texture_2d<f32>;
 var uMirrorDataSampler: sampler;
 uniform uMirrorCount: f32;
+uniform uMainCamPos: vec3f;
+uniform view_position: vec3f;
 
 var<private> gMirrorKeep: f32 = 1.0;
 
@@ -136,6 +181,45 @@ fn mirrorHoleKeep(i: f32, worldCenter: vec3f) -> f32 {
     return 1.0 - slab * inside;
 }
 
+// During a reflection camera's own render pass (identified below), discard
+// anything on the far side of the mirror it's reflecting - otherwise the
+// reflected eye position (mirrored across the mirror's plane) can land near
+// or inside completely different geometry - another room, the far side of
+// the same wall - and that leaks into the reflection instead of whatever's
+// actually in front of the mirror.
+fn reflectionClipKeep(center: vec3f) -> f32 {
+    var best: f32 = -1.0;
+    var bestD: f32 = 1e9;
+    for (var i: i32 = 0; i < MIRROR_MAX; i++) {
+        if (f32(i) >= uniform.uMirrorCount) {
+            break;
+        }
+        let shapeParams = mirrorTexel(f32(i), 4.0);
+        if (shapeParams.w < 0.5) {
+            continue;
+        }
+        let plane = mirrorTexel(f32(i), 6.0);
+        let dMain = dot(plane.xyz, uniform.uMainCamPos) + plane.w;
+        let reflectedCamPos = uniform.uMainCamPos - 2.0 * dMain * plane.xyz;
+        let d = distance(reflectedCamPos, uniform.view_position);
+        if (d < bestD) {
+            bestD = d;
+            best = f32(i);
+        }
+    }
+    // A reflection camera sits exactly at its mirror's reflected-camera
+    // position (bestD ~ 0) but far from the main camera; the main camera's
+    // own pass matches no mirror's reflected position at all, so it never
+    // clips regardless of where it stands relative to any mirror.
+    let distToMain = distance(uniform.view_position, uniform.uMainCamPos);
+    if (best < 0.0 || bestD >= distToMain) {
+        return 1.0;
+    }
+    let plane = mirrorTexel(best, 6.0);
+    let side = dot(plane.xyz, center) + plane.w;
+    return step(0.0, side);
+}
+
 fn modifySplatCenter(center: ptr<function, vec3f>) {
     var keep: f32 = 1.0;
     for (var i: i32 = 0; i < MIRROR_MAX; i++) {
@@ -144,6 +228,7 @@ fn modifySplatCenter(center: ptr<function, vec3f>) {
         }
         keep = keep * mirrorHoleKeep(f32(i), *center);
     }
+    keep = keep * reflectionClipKeep(*center);
     gMirrorKeep = keep;
 }
 
