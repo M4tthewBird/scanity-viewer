@@ -44,7 +44,8 @@ By default the viewer uses WebGPU when available (falling back automatically whe
 
 | Parameter | Description |
 | --------- | ----------- |
-| `webgl` | Force the WebGL renderer (required for AR/VR) |
+| `webgl` | Force the WebGL renderer (required for AR/VR). Scenes with a `mirrors.json` already use WebGL, because the mirror clipping only works there |
+| `webgpu` | Force WebGPU even for a scene with mirrors (mirror reflections will show what is behind the mirror wall) |
 | `aa` | Enable antialiasing (WebGL only) |
 | `nofx` | Disable post effects |
 | `hpr` | Override `highPrecisionRendering` from settings (`?hpr`, `?hpr=1`, `?hpr=true`, `?hpr=enable` to enable) |

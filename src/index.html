@@ -167,7 +167,15 @@
                       ? await resolveContentUrl(sceneFolder, id)
                       : './scene.compressed.ply';
 
-                const renderer = url.searchParams.has('webgl') ? 'webgl' : 'webgpu';
+                // Scanity: scenes with mirrors render on WebGL, like the Splat
+                // Portal Mirror Tool they were authored in. On WebGPU the engine
+                // runs the gsplatModifyVS chunk (mirror holes + the clip that
+                // hides everything behind a mirror) in a compute pass with a
+                // fixed uniform set, so it never sees the mirror data or the
+                // per-camera position - reflections then show the room behind
+                // the mirror wall. ?webgpu forces WebGPU anyway, for testing.
+                const renderer =
+                    url.searchParams.has('webgl') || (mirrorsUrl && !url.searchParams.has('webgpu')) ? 'webgl' : 'webgpu';
 
                 const budgetParam = url.searchParams.get('budget');
                 const budget = budgetParam !== null ? Number(budgetParam) : undefined;
@@ -422,111 +430,226 @@
                     </div>
 
                     <div id="infoPanels">
-                        <!-- Desktop: one of these five is shown at a time -->
+                        <!-- Desktop: one of these five is shown at a time. Full
+                             control list per mode (action left, mouse/keys
+                             right), every row backed by a real binding in
+                             src/input/ (keyboard-mouse.ts, nav-interaction.ts,
+                             mode-shortcuts.ts) -->
                         <div id="desktopInfoPanel">
                             <div id="infoOrbitDesktop" class="infoModeBlock">
-                                <div class="infoRow">
-                                    <span class="infoBadge"><svg width="18" height="18" viewBox="0 0 24 24"><use href="#dragIcon" /></svg></span>
-                                    <span class="infoRowText"
-                                        ><span class="infoRowTitle" data-i18n="help.action.orbit">Orbit</span
-                                        ><span class="infoRowBody" data-i18n="help.key.left-click-drag"
-                                            >Left Click + Drag</span
-                                        ></span
-                                    >
-                                </div>
-                                <div class="infoRow">
-                                    <span class="infoBadge"><svg width="18" height="18" viewBox="0 0 24 24"><use href="#rightIcon" /></svg></span>
-                                    <span class="infoRowText"
-                                        ><span class="infoRowTitle" data-i18n="help.action.pan">Pan</span
-                                        ><span class="infoRowBody" data-i18n="help.key.right-click-drag"
-                                            >Right Click + Drag</span
-                                        ></span
-                                    >
-                                </div>
-                                <div class="infoRow">
-                                    <span class="infoBadge"><svg width="18" height="18" viewBox="0 0 24 24"><use href="#wheelIcon" /></svg></span>
-                                    <span class="infoRowText"
-                                        ><span class="infoRowTitle" data-i18n="help.action.zoom">Zoom</span
-                                        ><span class="infoRowBody" data-i18n="help.key.mouse-wheel"
-                                            >Mouse Wheel</span
-                                        ></span
-                                    >
+                                <div class="infoModeTitle" data-i18n="help.section.orbit">Orbit Mode</div>
+                                <div class="infoList">
+                                    <div class="infoLine">
+                                        <span class="infoLineTitle" data-i18n="help.action.orbit">Orbit</span>
+                                        <span class="infoChip infoChip--mouse"
+                                            ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#dragIcon" /></svg
+                                            ><span data-i18n="help.key.left-click-drag">Left Click + Drag</span></span
+                                        >
+                                    </div>
+                                    <div class="infoLine">
+                                        <span class="infoLineTitle" data-i18n="help.action.pan">Pan</span>
+                                        <span class="infoChip infoChip--mouse"
+                                            ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#rightIcon" /></svg
+                                            ><span data-i18n="help.key.right-click-drag">Right Click + Drag</span></span
+                                        >
+                                    </div>
+                                    <div class="infoLine">
+                                        <span class="infoLineTitle" data-i18n="help.action.zoom">Zoom</span>
+                                        <span class="infoChip infoChip--mouse"
+                                            ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#wheelIcon" /></svg
+                                            ><span data-i18n="help.key.mouse-wheel">Mouse Wheel</span></span
+                                        >
+                                    </div>
+                                    <div class="infoLine">
+                                        <span class="infoLineTitle" data-i18n="help.action.set-focus">Set Focus</span>
+                                        <span class="infoChip infoChip--mouse"
+                                            ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#leftClickIcon" /></svg
+                                            ><span data-i18n="help.key.left-click">Left Click</span></span
+                                        >
+                                    </div>
+                                    <div class="infoLine">
+                                        <span class="infoLineTitle" data-i18n="help.action.fly-to-point">Fly to Point</span>
+                                        <span class="infoChip infoChip--mouse"
+                                            ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#leftClickIcon" /></svg
+                                            ><span data-i18n="help.key.double-click">Double-click</span></span
+                                        >
+                                    </div>
+                                    <div class="infoLine">
+                                        <span class="infoLineTitle" data-i18n="help.action.frame-scene">Frame Scene</span>
+                                        <span class="infoKeys"><kbd>F</kbd></span>
+                                    </div>
+                                    <div class="infoLine">
+                                        <span class="infoLineTitle" data-i18n="help.action.reset-camera">Reset Camera</span>
+                                        <span class="infoKeys"><kbd>R</kbd></span>
+                                    </div>
+                                    <div class="infoLine">
+                                        <span class="infoLineTitle" data-i18n="help.action.toggle-help">Toggle Help</span>
+                                        <span class="infoKeys"><kbd>H</kbd></span>
+                                    </div>
                                 </div>
                             </div>
 
                             <div id="infoFlyDesktopClick" class="infoModeBlock hidden">
-                                <div class="infoChipRow">
-                                    <span class="infoRowTitle" data-i18n="help.action.fly-to">Fly To</span>
-                                    <span class="infoChip" data-i18n="help.key.left-click">Left Click</span>
-                                </div>
-                                <div class="infoRow">
-                                    <span class="infoBadge"><svg width="18" height="18" viewBox="0 0 24 24"><use href="#dragIcon" /></svg></span>
-                                    <span class="infoRowText"
-                                        ><span class="infoRowTitle" data-i18n="help.action.look-around"
-                                            >Look Around</span
-                                        ><span class="infoRowBody" data-i18n="help.key.left-click-drag"
-                                            >Left Click + Drag</span
-                                        ></span
-                                    >
-                                </div>
-                                <div class="infoChipRow">
-                                    <span class="infoRowTitle" data-i18n="help.action.move">Move</span>
-                                    <span class="infoChip">WASD</span>
+                                <div class="infoModeTitle" data-i18n="help.section.fly">Fly Mode</div>
+                                <div class="infoList">
+                                    <div class="infoLine">
+                                        <span class="infoLineTitle" data-i18n="help.action.fly-to">Fly To</span>
+                                        <span class="infoChip infoChip--mouse"
+                                            ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#leftClickIcon" /></svg
+                                            ><span data-i18n="help.key.left-click">Left Click</span></span
+                                        >
+                                    </div>
+                                    <div class="infoLine">
+                                        <span class="infoLineTitle" data-i18n="help.action.look-around">Look Around</span>
+                                        <span class="infoChip infoChip--mouse"
+                                            ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#dragIcon" /></svg
+                                            ><span data-i18n="help.key.left-click-drag">Left Click + Drag</span></span
+                                        >
+                                    </div>
+                                    <div class="infoLine">
+                                        <span class="infoLineTitle" data-i18n="help.action.pan">Pan</span>
+                                        <span class="infoChip infoChip--mouse"
+                                            ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#rightIcon" /></svg
+                                            ><span data-i18n="help.key.right-click-drag">Right Click + Drag</span></span
+                                        >
+                                    </div>
+                                    <div class="infoLine">
+                                        <span class="infoLineTitle" data-i18n="help.action.focus-point">Focus Point</span>
+                                        <span class="infoChip infoChip--mouse"
+                                            ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#leftClickIcon" /></svg
+                                            ><span data-i18n="help.key.double-click">Double-click</span></span
+                                        >
+                                    </div>
+                                    <div class="infoLine">
+                                        <span class="infoLineTitle" data-i18n="help.action.move">Move</span>
+                                        <span class="infoKeys"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span>
+                                    </div>
+                                    <div class="infoLine">
+                                        <span class="infoLineTitle" data-i18n="help.action.run-slow">Run / Slow</span>
+                                        <span class="infoKeys"><kbd>Shift</kbd><span class="infoKeySep">/</span><kbd>Ctrl</kbd></span>
+                                    </div>
+                                    <div class="infoLine">
+                                        <span class="infoLineTitle" data-i18n="help.action.reset-camera">Reset Camera</span>
+                                        <span class="infoKeys"><kbd>R</kbd></span>
+                                    </div>
+                                    <div class="infoLine">
+                                        <span class="infoLineTitle" data-i18n="help.action.toggle-help">Toggle Help</span>
+                                        <span class="infoKeys"><kbd>H</kbd></span>
+                                    </div>
                                 </div>
                             </div>
 
                             <div id="infoFlyDesktopGaming" class="infoModeBlock hidden">
-                                <div class="infoRow">
-                                    <span class="infoBadge"><svg width="18" height="18" viewBox="0 0 24 24"><use href="#dragIcon" /></svg></span>
-                                    <span class="infoRowText"
-                                        ><span class="infoRowTitle" data-i18n="help.action.look-around"
-                                            >Look Around</span
-                                        ><span class="infoRowBody" data-i18n="help.key.mouse">Mouse</span></span
-                                    >
-                                </div>
-                                <div class="infoChipRow">
-                                    <span class="infoRowTitle" data-i18n="help.action.move">Move</span>
-                                    <span class="infoChip">WASD</span>
-                                </div>
-                                <div class="infoChipRow">
-                                    <span class="infoRowTitle" data-i18n="help.action.vertical">Vertical</span>
-                                    <span class="infoChip">Q&nbsp;E</span>
+                                <div class="infoModeTitle" data-i18n="help.section.fly">Fly Mode</div>
+                                <div class="infoList">
+                                    <div class="infoLine">
+                                        <span class="infoLineTitle" data-i18n="help.action.look-around">Look Around</span>
+                                        <span class="infoChip infoChip--mouse"
+                                            ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#dragIcon" /></svg
+                                            ><span data-i18n="help.key.mouse">Mouse</span></span
+                                        >
+                                    </div>
+                                    <div class="infoLine">
+                                        <span class="infoLineTitle" data-i18n="help.action.move">Move</span>
+                                        <span class="infoKeys"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span>
+                                    </div>
+                                    <div class="infoLine">
+                                        <span class="infoLineTitle" data-i18n="help.action.vertical">Vertical</span>
+                                        <span class="infoKeys"><kbd>Q</kbd><kbd>E</kbd></span>
+                                    </div>
+                                    <div class="infoLine">
+                                        <span class="infoLineTitle" data-i18n="help.action.run-slow">Run / Slow</span>
+                                        <span class="infoKeys"><kbd>Shift</kbd><span class="infoKeySep">/</span><kbd>Ctrl</kbd></span>
+                                    </div>
+                                    <div class="infoLine">
+                                        <span class="infoLineTitle" data-i18n="help.action.reset-camera">Reset Camera</span>
+                                        <span class="infoKeys"><kbd>R</kbd></span>
+                                    </div>
+                                    <div class="infoLine">
+                                        <span class="infoLineTitle" data-i18n="help.action.toggle-help">Toggle Help</span>
+                                        <span class="infoKeys"><kbd>H</kbd></span>
+                                    </div>
+                                    <div class="infoLine">
+                                        <span class="infoLineTitle" data-i18n="help.action.exit-cancel">Exit / Cancel</span>
+                                        <span class="infoKeys"><kbd data-i18n="help.key.esc">Esc</kbd></span>
+                                    </div>
                                 </div>
                             </div>
 
                             <div id="infoWalkDesktopClick" class="infoModeBlock hidden">
-                                <div class="infoChipRow">
-                                    <span class="infoRowTitle" data-i18n="help.action.walk-to">Walk To</span>
-                                    <span class="infoChip" data-i18n="help.key.left-click">Left Click</span>
-                                </div>
-                                <div class="infoRow">
-                                    <span class="infoBadge"><svg width="18" height="18" viewBox="0 0 24 24"><use href="#dragIcon" /></svg></span>
-                                    <span class="infoRowText"
-                                        ><span class="infoRowTitle" data-i18n="help.action.look-around"
-                                            >Look Around</span
-                                        ><span class="infoRowBody" data-i18n="help.key.left-click-drag"
-                                            >Left Click + Drag</span
-                                        ></span
-                                    >
+                                <div class="infoModeTitle" data-i18n="help.section.walk">Walk Mode</div>
+                                <div class="infoList">
+                                    <div class="infoLine">
+                                        <span class="infoLineTitle" data-i18n="help.action.walk-to">Walk To</span>
+                                        <span class="infoChip infoChip--mouse"
+                                            ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#leftClickIcon" /></svg
+                                            ><span data-i18n="help.key.left-click">Left Click</span></span
+                                        >
+                                    </div>
+                                    <div class="infoLine">
+                                        <span class="infoLineTitle" data-i18n="help.action.look-around">Look Around</span>
+                                        <span class="infoChip infoChip--mouse"
+                                            ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#dragIcon" /></svg
+                                            ><span data-i18n="help.key.left-click-drag">Left Click + Drag</span></span
+                                        >
+                                    </div>
+                                    <div class="infoLine">
+                                        <span class="infoLineTitle" data-i18n="help.action.move">Move</span>
+                                        <span class="infoKeys"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span>
+                                    </div>
+                                    <div class="infoLine">
+                                        <span class="infoLineTitle" data-i18n="help.action.run-slow">Run / Slow</span>
+                                        <span class="infoKeys"><kbd>Shift</kbd><span class="infoKeySep">/</span><kbd>Ctrl</kbd></span>
+                                    </div>
+                                    <div class="infoLine">
+                                        <span class="infoLineTitle" data-i18n="help.action.jump">Jump</span>
+                                        <span class="infoKeys"><kbd data-i18n="help.key.space">Space</kbd></span>
+                                    </div>
+                                    <div class="infoLine">
+                                        <span class="infoLineTitle" data-i18n="help.action.reset-camera">Reset Camera</span>
+                                        <span class="infoKeys"><kbd>R</kbd></span>
+                                    </div>
+                                    <div class="infoLine">
+                                        <span class="infoLineTitle" data-i18n="help.action.toggle-help">Toggle Help</span>
+                                        <span class="infoKeys"><kbd>H</kbd></span>
+                                    </div>
                                 </div>
                             </div>
 
                             <div id="infoWalkDesktopGaming" class="infoModeBlock hidden">
-                                <div class="infoRow">
-                                    <span class="infoBadge"><svg width="18" height="18" viewBox="0 0 24 24"><use href="#dragIcon" /></svg></span>
-                                    <span class="infoRowText"
-                                        ><span class="infoRowTitle" data-i18n="help.action.look-around"
-                                            >Look Around</span
-                                        ><span class="infoRowBody" data-i18n="help.key.mouse">Mouse</span></span
-                                    >
-                                </div>
-                                <div class="infoChipRow">
-                                    <span class="infoRowTitle" data-i18n="help.action.move">Move</span>
-                                    <span class="infoChip">WASD</span>
-                                </div>
-                                <div class="infoChipRow">
-                                    <span class="infoRowTitle" data-i18n="help.action.jump">Jump</span>
-                                    <span class="infoChip" data-i18n="help.key.space">Space</span>
+                                <div class="infoModeTitle" data-i18n="help.section.walk">Walk Mode</div>
+                                <div class="infoList">
+                                    <div class="infoLine">
+                                        <span class="infoLineTitle" data-i18n="help.action.look-around">Look Around</span>
+                                        <span class="infoChip infoChip--mouse"
+                                            ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#dragIcon" /></svg
+                                            ><span data-i18n="help.key.mouse">Mouse</span></span
+                                        >
+                                    </div>
+                                    <div class="infoLine">
+                                        <span class="infoLineTitle" data-i18n="help.action.move">Move</span>
+                                        <span class="infoKeys"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span>
+                                    </div>
+                                    <div class="infoLine">
+                                        <span class="infoLineTitle" data-i18n="help.action.run-slow">Run / Slow</span>
+                                        <span class="infoKeys"><kbd>Shift</kbd><span class="infoKeySep">/</span><kbd>Ctrl</kbd></span>
+                                    </div>
+                                    <div class="infoLine">
+                                        <span class="infoLineTitle" data-i18n="help.action.jump">Jump</span>
+                                        <span class="infoKeys"><kbd data-i18n="help.key.space">Space</kbd></span>
+                                    </div>
+                                    <div class="infoLine">
+                                        <span class="infoLineTitle" data-i18n="help.action.reset-camera">Reset Camera</span>
+                                        <span class="infoKeys"><kbd>R</kbd></span>
+                                    </div>
+                                    <div class="infoLine">
+                                        <span class="infoLineTitle" data-i18n="help.action.toggle-help">Toggle Help</span>
+                                        <span class="infoKeys"><kbd>H</kbd></span>
+                                    </div>
+                                    <div class="infoLine">
+                                        <span class="infoLineTitle" data-i18n="help.action.exit-cancel">Exit / Cancel</span>
+                                        <span class="infoKeys"><kbd data-i18n="help.key.esc">Esc</kbd></span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -665,8 +788,18 @@
                         <g class="fill"><use href="#chevronLeftIcon" /></g>
                     </svg>
                 </button>
-                <div id="annotationInfo">
+                <div
+                    id="annotationInfo"
+                    role="button"
+                    tabindex="0"
+                    aria-haspopup="listbox"
+                    aria-expanded="false"
+                    aria-controls="annotationList"
+                >
                     <span id="annotationNavTitle"></span>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" aria-hidden="true">
+                        <use href="#chevronDownIcon" />
+                    </svg>
                 </div>
                 <button id="annotationNext">
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20">
@@ -675,6 +808,11 @@
                     </svg>
                 </button>
             </div>
+
+            <!-- Annotation list: opened by clicking the title in the navigator.
+                 Kept outside #annotationNav so the pill's overflow clipping
+                 doesn't cut it off. -->
+            <div id="annotationList" class="hidden" role="listbox"></div>
 
             <!-- Tooltip -->
             <div id="tooltip"></div>
@@ -784,6 +922,9 @@
             <symbol id="chevronRightIcon" viewBox="0 0 24 24">
                 <path d="M9 5l7 7-7 7" />
             </symbol>
+            <symbol id="chevronDownIcon" viewBox="0 0 24 24">
+                <path d="M5 9l7 7 7-7" />
+            </symbol>
             <symbol id="dragIcon" viewBox="0 0 24 24">
                 <rect
                     x="7"
@@ -816,6 +957,26 @@
                 />
                 <path
                     d="M12 6.5v4M12 3.2 10.4 5M12 3.2 13.6 5"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                />
+            </symbol>
+            <symbol id="leftClickIcon" viewBox="0 0 24 24">
+                <rect
+                    x="7"
+                    y="2.5"
+                    width="10"
+                    height="19"
+                    rx="5"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                />
+                <path
+                    d="M12 2.5v9.5M7 12h10M9.4 2.6A5 5 0 0 0 7 6.9V12"
                     fill="none"
                     stroke="currentColor"
                     stroke-width="1.7"

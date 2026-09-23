@@ -20,7 +20,16 @@ const initJoystick = (
 
     // Fixed joystick position (bottom-left corner with safe area)
     const joystickFixedX = 70;
-    const joystickFixedY = () => window.innerHeight - 140;
+    const joystickFixedY = () => {
+        const defaultY = window.innerHeight - 140;
+        // Scanity: on touch the annotation navigator is a bottom bar, which
+        // the joystick's default spot overlaps, so sit 12px above it instead
+        const nav = dom.annotationNav;
+        if (!nav.classList.contains('touch') || nav.classList.contains('hidden')) {
+            return defaultY;
+        }
+        return Math.min(defaultY, nav.getBoundingClientRect().top - joystickHeight / 2 - 12);
+    };
 
     // Joystick touch state
     let joystickPointerId: number | null = null;
@@ -59,6 +68,7 @@ const initJoystick = (
     events.on('cameraMode:changed', updateJoystickVisibility);
     events.on('inputMode:changed', updateJoystickVisibility);
     events.on('gamingControls:changed', updateJoystickVisibility);
+    events.on('annotationNav:layout', updateJoystickVisibility);
     window.addEventListener('resize', updateJoystickVisibility);
 
     // Handle joystick touch input directly on the joystick element
@@ -153,24 +163,75 @@ const initAnnotationNav = (
 
     let currentIndex = 0;
 
+    // Scanity: clicking the title opens a list of every annotation to jump to
+    // directly (drops down on desktop, opens upward from the touch bottom bar).
+    const listItems = annotations.map((annotation, index) => {
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.setAttribute('role', 'option');
+
+        const indexSpan = document.createElement('span');
+        indexSpan.className = 'annotationListIndex';
+        indexSpan.textContent = String(index + 1);
+
+        const titleSpan = document.createElement('span');
+        titleSpan.className = 'annotationListTitle';
+        titleSpan.textContent = annotation.title || '';
+
+        item.append(indexSpan, titleSpan);
+        item.addEventListener('click', (e) => {
+            e.stopPropagation();
+            setListOpen(false);
+            goTo(index);
+        });
+        return item;
+    });
+    dom.annotationList.append(...listItems);
+
+    // Let the list scroll natively instead of the UI-wide wheel forwarding
+    // (see initUI) turning it into a camera zoom.
+    dom.annotationList.addEventListener('wheel', (e) => e.stopPropagation());
+
+    const isListOpen = () => !dom.annotationList.classList.contains('hidden');
+
+    const setListOpen = (open: boolean) => {
+        dom.annotationList.classList.toggle('hidden', !open);
+        dom.annotationInfo.setAttribute('aria-expanded', String(open));
+        if (open) {
+            listItems[currentIndex].scrollIntoView({ block: 'nearest' });
+        }
+    };
+
     const updateDisplay = () => {
         dom.annotationNavTitle.textContent = annotations[currentIndex].title || '';
+        listItems.forEach((item, index) => {
+            item.classList.toggle('active', index === currentIndex);
+            item.setAttribute('aria-selected', String(index === currentIndex));
+        });
     };
 
     const updateMode = () => {
         if (!state.loaded) return;
         if (!state.showAnnotations) {
             dom.annotationNav.classList.add('hidden');
+            setListOpen(false);
+            events.fire('annotationNav:layout');
             return;
         }
         dom.annotationNav.classList.remove('desktop', 'touch', 'hidden');
         dom.annotationNav.classList.add(state.inputMode);
+        dom.annotationList.classList.remove('desktop', 'touch');
+        dom.annotationList.classList.add(state.inputMode);
+        events.fire('annotationNav:layout');
     };
 
     const updateFade = () => {
         if (!state.loaded) return;
         dom.annotationNav.classList.toggle('faded-in', !state.controlsHidden);
         dom.annotationNav.classList.toggle('faded-out', state.controlsHidden);
+        if (state.controlsHidden) {
+            setListOpen(false);
+        }
     };
 
     const goTo = (index: number) => {
@@ -178,6 +239,38 @@ const initAnnotationNav = (
         updateDisplay();
         events.fire('annotation.navigate', annotations[currentIndex]);
     };
+
+    // Open / close the list from the title
+    dom.annotationInfo.addEventListener('click', (e) => {
+        e.stopPropagation();
+        setListOpen(!isListOpen());
+    });
+
+    dom.annotationInfo.addEventListener('keydown', (e: KeyboardEvent) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            e.stopPropagation();
+            setListOpen(!isListOpen());
+        }
+    });
+
+    // Close on any press outside the title and the list (including the canvas)
+    document.addEventListener(
+        'pointerdown',
+        (e) => {
+            const target = e.target as Node;
+            if (isListOpen() && !dom.annotationInfo.contains(target) && !dom.annotationList.contains(target)) {
+                setListOpen(false);
+            }
+        },
+        true
+    );
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && isListOpen()) {
+            setListOpen(false);
+        }
+    });
 
     // Prev / Next
     dom.annotationPrev.addEventListener('click', (e) => {
@@ -297,6 +390,7 @@ const initUI = (global: Global) => {
         'annotationNext',
         'annotationInfo',
         'annotationNavTitle',
+        'annotationList',
         'viewerBranding',
         'xrModal',
         'xrModalOk',

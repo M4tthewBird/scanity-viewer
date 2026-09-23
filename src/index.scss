@@ -43,6 +43,11 @@ $clr-bkg-dark: $clr-ink-soft; // small dark chips (tooltip, time badge)
 $clr-bkg-darkest: $clr-ink; // also reused below as the "subtle line/hover tint" color
 $clr-bkg-light: $clr-silver;
 
+// Touch annotation bar: 10px above the 34px bottom controls row; its list
+// opens 8px above the 46px-tall bar
+$annotation-bar-touch-bottom: calc(max(16px, env(safe-area-inset-bottom)) + 44px);
+$annotation-list-touch-bottom: calc(max(16px, env(safe-area-inset-bottom)) + 98px);
+
 :root {
     --canvas-opacity: 1;
 }
@@ -455,6 +460,7 @@ button {
     position: fixed;
     right: max(16px, env(safe-area-inset-right));
     bottom: calc(max(16px, env(safe-area-inset-bottom)) + 70px);
+    z-index: 1; // above the touch annotation bar, which it can overlap
     padding: 12px;
     border-radius: 16px;
     border: 1px solid rgba($clr-white, 0.9);
@@ -812,6 +818,86 @@ button {
                 margin-bottom: 2px;
                 color: $clr-accent;
             }
+
+            /* Desktop: full control list per mode — one card, hairline rows,
+               action on the left and its mouse chip / keycaps on the right */
+            .infoModeTitle {
+                font-size: 11px;
+                font-weight: 700;
+                letter-spacing: 0.1em;
+                text-transform: uppercase;
+                color: $clr-accent;
+            }
+
+            .infoList {
+                border: 1px solid rgba($clr-ink, 0.12);
+                border-radius: 14px;
+                background-color: rgba($clr-white, 0.7);
+                overflow: hidden;
+            }
+
+            .infoLine {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 12px;
+                min-height: 40px;
+                padding: 6px 14px;
+
+                & + .infoLine {
+                    border-top: 1px solid rgba($clr-ink, 0.07);
+                }
+            }
+
+            .infoLineTitle {
+                font-size: 0.86rem;
+                font-weight: 600;
+                letter-spacing: -0.01em;
+                color: $clr-ink;
+            }
+
+            .infoChip--mouse {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                padding: 4px 9px 4px 6px;
+                white-space: nowrap;
+
+                > svg {
+                    flex: none;
+                    color: $clr-accent;
+                }
+            }
+
+            .infoKeys {
+                flex: none;
+                display: flex;
+                align-items: center;
+                gap: 4px;
+
+                > kbd {
+                    min-width: 24px;
+                    height: 24px;
+                    padding: 0 7px;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    border: 1px solid rgba($clr-ink, 0.14);
+                    border-radius: 6px;
+                    box-shadow: 0 1.5px 0 rgba($clr-ink, 0.14);
+                    background-color: $clr-white;
+                    color: $clr-ink;
+                    font-family: inherit;
+                    font-size: 0.72rem;
+                    font-weight: 700;
+                    line-height: 1;
+                }
+
+                > .infoKeySep {
+                    font-size: 0.76rem;
+                    color: $clr-text-darkest;
+                }
+            }
         }
 
         > #infoPanelFoot {
@@ -1093,10 +1179,11 @@ button {
         }
     }
 
-    // Desktop mode: horizontal bar at top center
-    &.desktop {
+    // Horizontal pill bar: top center on desktop, bottom center on touch
+    // (Scanity: touch used to get two arrows on the screen edges instead)
+    &.desktop,
+    &.touch {
         position: absolute;
-        top: max(16px, env(safe-area-inset-top));
         left: 50%;
         transform: translateX(-50%);
 
@@ -1117,19 +1204,40 @@ button {
             height: 34px;
             background-color: transparent;
 
+            // Soft round white glow rather than a square block beside the title
             &:hover {
-                background-color: rgba($clr-ink, 0.05);
+                background-color: transparent;
+                background-image: radial-gradient(circle closest-side, rgba($clr-white, 0.95), rgba($clr-white, 0));
             }
         }
 
         > #annotationInfo {
-            pointer-events: none;
+            pointer-events: auto;
+            cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
+            gap: 6px;
+            align-self: stretch;
             padding: 0 12px;
             white-space: nowrap;
             width: 240px;
+            outline: none;
+
+            // Highlight brightens toward solid white (reads as "lit up" on the
+            // translucent pill) and fades out toward the arrows instead of
+            // ending in a hard-edged block beside them
+            &:hover,
+            &:focus-visible,
+            &[aria-expanded='true'] {
+                background-image: linear-gradient(
+                    90deg,
+                    rgba($clr-white, 0) 0%,
+                    rgba($clr-white, 0.95) 30%,
+                    rgba($clr-white, 0.95) 70%,
+                    rgba($clr-white, 0) 100%
+                );
+            }
 
             > #annotationNavTitle {
                 font-size: 13px;
@@ -1138,42 +1246,152 @@ button {
                 overflow: hidden;
                 text-overflow: ellipsis;
             }
+
+            > svg {
+                flex-shrink: 0;
+                fill: none;
+                stroke: $clr-text;
+                stroke-width: 2.5;
+                stroke-linecap: round;
+                stroke-linejoin: round;
+                transition: transform 200ms ease;
+            }
+
+            &[aria-expanded='true'] > svg {
+                transform: rotate(180deg);
+            }
         }
     }
 
-    // Touch mode: buttons at left/right screen edges
-    &.touch {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
+    &.desktop {
+        top: max(16px, env(safe-area-inset-top));
+    }
 
-        > #annotationInfo {
-            display: none;
-        }
+    // Touch: sits 10px above the bottom controls row (34px), with
+    // finger-sized 44px targets, and the title stretching to fill
+    &.touch {
+        bottom: $annotation-bar-touch-bottom;
+        width: min(328px, calc(100vw - 32px));
 
         > button {
-            position: absolute;
-            top: 50%;
-            transform: translateY(-50%);
+            flex-shrink: 0;
             width: 44px;
-            height: 80px;
-            background-color: rgba($clr-bkg, 0.6);
+            height: 44px;
 
             &:active {
-                background-color: rgba($clr-bkg, 0.8);
+                background-image: radial-gradient(circle closest-side, rgba($clr-white, 0.95), rgba($clr-white, 0));
             }
         }
 
-        > #annotationPrev {
-            left: max(0px, env(safe-area-inset-left));
-            border-radius: 0 16px 16px 0;
+        > #annotationInfo {
+            flex: 1;
+            width: auto;
+            min-width: 0;
+        }
+    }
+}
+
+// The timeline (scenes with camera animation) adds a 30px row above the
+// bottom controls, so lift the touch bar and its list by the same amount.
+#ui:has(#timelineContainer:not(.hidden)) {
+    > #annotationNav.touch {
+        bottom: calc(#{$annotation-bar-touch-bottom} + 30px);
+    }
+
+    > #annotationList.touch {
+        bottom: calc(#{$annotation-list-touch-bottom} + 30px);
+    }
+}
+
+/* annotationList: drops down under the desktop annotationNav pill (36px
+   tall), or opens upward above the touch one (46px tall) */
+
+#annotationList {
+    position: absolute;
+    left: 50%;
+
+    &.desktop {
+        top: calc(max(16px, env(safe-area-inset-top)) + 44px);
+    }
+
+    &.touch {
+        bottom: $annotation-list-touch-bottom;
+        max-height: min(360px, 50vh);
+
+        > button {
+            min-height: 44px;
+
+            &:active {
+                background-color: rgba($clr-ink, 0.08);
+            }
+        }
+    }
+
+    transform: translateX(-50%);
+    width: 308px;
+    max-width: calc(100vw - 32px);
+    max-height: min(360px, 60vh);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 6px;
+    border-radius: 16px;
+    border: 1px solid rgba($clr-white, 0.9);
+
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+
+    background-color: rgba($clr-bkg, 0.85);
+    box-shadow: 0 20px 50px rgba($clr-ink, 0.12);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+
+    > button {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        min-height: 34px;
+        padding: 6px 10px;
+        border: 0;
+        border-radius: 10px;
+        cursor: pointer;
+        text-align: left;
+        font-size: 13px;
+        font-weight: 500;
+
+        color: $clr-ink-soft;
+        background-color: transparent;
+
+        > .annotationListIndex {
+            flex-shrink: 0;
+            min-width: 18px;
+            font-size: 11px;
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+            color: $clr-text-darkest;
         }
 
-        > #annotationNext {
-            right: max(0px, env(safe-area-inset-right));
-            border-radius: 16px 0 0 16px;
+        > .annotationListTitle {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        &:hover,
+        &:focus-visible {
+            outline: none;
+            background-color: rgba($clr-ink, 0.05);
+        }
+
+        &.active {
+            font-weight: 600;
+            color: $clr-accent;
+            background-color: rgba($clr-accent, 0.08);
+
+            > .annotationListIndex {
+                color: $clr-accent;
+            }
         }
     }
 }

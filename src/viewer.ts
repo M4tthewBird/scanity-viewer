@@ -484,7 +484,7 @@ class Viewer {
             this.debugPanel = new DebugPanel(global, this.cameraManager);
 
             if (mirrors.length > 0) {
-                this.mirrorPortals = new MirrorPortals(app, camera, mirrors);
+                this.mirrorPortals = new MirrorPortals(app, camera, mirrors, sceneBound);
             }
 
             const { gsplat } = app.scene;
