@@ -45,7 +45,6 @@ class Annotations {
 
         if (hasCameraFrame) {
             Annotation.hotspotColor.gamma();
-            Annotation.hoverColor.gamma();
         }
 
         // create annotation entities

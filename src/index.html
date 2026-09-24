@@ -777,6 +777,13 @@
 
             <!-- Touch Joystick -->
             <div id="joystickBase" class="hidden">
+                <!-- Ring + direction arrows, faint until touched (1D mode hides left/right) -->
+                <div class="joystickRing" aria-hidden="true">
+                    <div class="joystickArrow up"></div>
+                    <div class="joystickArrow down"></div>
+                    <div class="joystickArrow left"></div>
+                    <div class="joystickArrow right"></div>
+                </div>
                 <div id="joystick"></div>
             </div>
 

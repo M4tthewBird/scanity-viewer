@@ -43,11 +43,6 @@ $clr-bkg-dark: $clr-ink-soft; // small dark chips (tooltip, time badge)
 $clr-bkg-darkest: $clr-ink; // also reused below as the "subtle line/hover tint" color
 $clr-bkg-light: $clr-silver;
 
-// Touch annotation bar: 10px above the 34px bottom controls row; its list
-// opens 8px above the 46px-tall bar
-$annotation-bar-touch-bottom: calc(max(16px, env(safe-area-inset-bottom)) + 44px);
-$annotation-list-touch-bottom: calc(max(16px, env(safe-area-inset-bottom)) + 98px);
-
 :root {
     --canvas-opacity: 1;
 }
@@ -972,48 +967,110 @@ button {
     }
 }
 
+// Touch joystick, from the "Joystick 2a" design: at rest a softened ring
+// and frosted knob, light enough to spot at once over a bright scene;
+// touching it brings the ring and arrows up to full strength and lets the
+// knob travel anywhere within a circle (43px, set in ui.ts), springing back
+// to centre on release. ui.ts toggles .is-active and moves the knob with a
+// transform; the base is centred on its left/top.
 #joystickBase {
     position: absolute;
-    width: 56px;
-    height: 100px;
+    width: 120px;
+    height: 120px;
     transform: translate(-50%, -50%);
-    border-radius: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     touch-action: none;
+    user-select: none;
+    cursor: grab;
 
-    background: linear-gradient(180deg, #0004 0%, #0000 30%, #0000 70%, #0004 100%);
-    background-color: #0003;
-    border: 2px solid #fff3;
-
-    transition:
-        width 0.2s ease,
-        height 0.2s ease,
-        border-radius 0.2s ease;
-
-    > #joystick {
+    > .joystickRing {
         position: absolute;
-        left: 8px; // (56 - 40) / 2 = 8px to center horizontally
-        width: 40px;
-        height: 40px;
+        inset: 0;
+        box-sizing: border-box;
         border-radius: 50%;
-        touch-action: none;
+        border: 1px solid rgba($clr-white, 0.5);
+        background: rgba($clr-white, 0.14);
+        pointer-events: none;
+        opacity: 0.75;
+        transform: scale(0.8);
+        transition:
+            opacity 180ms ease,
+            transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
 
-        background-color: #fff8;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        > .joystickArrow {
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            border-top: 1.5px solid rgba($clr-white, 0.8);
+            border-left: 1.5px solid rgba($clr-white, 0.8);
+            pointer-events: none;
 
-        transition: left 0.1s ease;
+            &.up {
+                top: 11px;
+                left: calc(50% - 5px);
+                transform: rotate(45deg);
+            }
+
+            &.down {
+                bottom: 11px;
+                left: calc(50% - 5px);
+                transform: rotate(225deg);
+            }
+
+            &.left {
+                left: 11px;
+                top: calc(50% - 5px);
+                transform: rotate(-45deg);
+            }
+
+            &.right {
+                right: 11px;
+                top: calc(50% - 5px);
+                transform: rotate(135deg);
+            }
+        }
     }
 
-    // 2D mode: square joystick with full directional movement
-    &.mode-2d {
-        width: 100px;
-        height: 100px;
-        border-radius: 50px;
-        background: radial-gradient(circle, #0000 40%, #0004 100%);
-        background-color: #0003;
+    // The knob
+    > #joystick {
+        box-sizing: border-box;
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        border: 1px solid rgba($clr-white, 0.6);
+        background: rgba($clr-white, 0.78);
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        pointer-events: none;
+        opacity: 0.85;
+        transition:
+            transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+            opacity 400ms ease 120ms;
+    }
+
+    // Held: full-strength ring, solid knob that follows the finger with no
+    // transform easing (the easing above is only the spring back)
+    &.is-active {
+        cursor: grabbing;
+
+        > .joystickRing {
+            opacity: 1;
+            transform: scale(1);
+        }
 
         > #joystick {
-            left: 30px; // (100 - 40) / 2 = 30px to center horizontally
+            opacity: 1;
+            transition: opacity 150ms ease;
         }
+    }
+
+    // 1D mode moves forward/back only, so only those two arrows show
+    &:not(.mode-2d) > .joystickRing > .joystickArrow:is(.left, .right) {
+        display: none;
     }
 }
 
@@ -1179,8 +1236,8 @@ button {
         }
     }
 
-    // Horizontal pill bar: top center on desktop, bottom center on touch
-    // (Scanity: touch used to get two arrows on the screen edges instead)
+    // Horizontal pill bar: top center on desktop, in the bottom controls row
+    // on touch (Scanity: touch used to get two arrows on the screen edges)
     &.desktop,
     &.touch {
         position: absolute;
@@ -1267,16 +1324,22 @@ button {
         top: max(16px, env(safe-area-inset-top));
     }
 
-    // Touch: sits 10px above the bottom controls row (34px), with
-    // finger-sized 44px targets, and the title stretching to fill
+    // Touch: lives inside the bottom controls row (ui.ts moves it into
+    // #buttonsContainer), as one more pill the same height as the button
+    // groups, filling the row's free left side; the title shrinks with an
+    // ellipsis on narrow phones. margin-right: auto keeps the button groups
+    // pushed to the right edge in place of the row's spacer.
     &.touch {
-        bottom: $annotation-bar-touch-bottom;
-        width: min(328px, calc(100vw - 32px));
+        position: relative;
+        left: auto;
+        transform: none;
+        flex: 1 1 0;
+        min-width: 0;
+        max-width: 320px;
+        margin-right: auto;
 
         > button {
             flex-shrink: 0;
-            width: 44px;
-            height: 44px;
 
             &:active {
                 background-image: radial-gradient(circle closest-side, rgba($clr-white, 0.95), rgba($clr-white, 0));
@@ -1287,24 +1350,19 @@ button {
             flex: 1;
             width: auto;
             min-width: 0;
+            padding: 0 6px;
         }
     }
 }
 
-// The timeline (scenes with camera animation) adds a 30px row above the
-// bottom controls, so lift the touch bar and its list by the same amount.
-#ui:has(#timelineContainer:not(.hidden)) {
-    > #annotationNav.touch {
-        bottom: calc(#{$annotation-bar-touch-bottom} + 30px);
-    }
-
-    > #annotationList.touch {
-        bottom: calc(#{$annotation-list-touch-bottom} + 30px);
-    }
+// With the touch bar in the row, it takes over the spacer's job
+#buttonsContainer:has(> #annotationNav.touch:not(.hidden)) > .spacer {
+    display: none;
 }
 
 /* annotationList: drops down under the desktop annotationNav pill (36px
-   tall), or opens upward above the touch one (46px tall) */
+   tall), or opens upward from the touch one in the bottom controls row
+   (36px tall), aligned to its left edge */
 
 #annotationList {
     position: absolute;
@@ -1315,7 +1373,9 @@ button {
     }
 
     &.touch {
-        bottom: $annotation-list-touch-bottom;
+        left: max(16px, env(safe-area-inset-left));
+        bottom: calc(max(16px, env(safe-area-inset-bottom)) + 44px);
+        transform: none;
         max-height: min(360px, 50vh);
 
         > button {

@@ -5,36 +5,25 @@ import type { Annotation } from './settings';
 import { Tooltip } from './tooltip';
 import type { Global } from './types';
 
-// Initialize the touch joystick for fly mode camera control
+// Initialize the touch joystick for fly mode camera control.
+// Scanity: the "Joystick 2a" design - a 120px base whose ring and direction
+// marks stay faint until touched, and a small frosted knob that travels
+// anywhere within a circle and springs back to centre on release (see
+// #joystickBase in index.scss).
 const initJoystick = (
     dom: Record<string, HTMLElement>,
     events: EventHandler,
     state: { cameraMode: string; inputMode: string; gamingControls: boolean }
 ) => {
-    // Joystick dimensions (matches SCSS: base height=100, stick size=40)
-    const joystickHeight = 100;
-    const stickSize = 40;
-    const stickCenterY = (joystickHeight - stickSize) / 2; // 30px - top position when centered
-    const stickCenterX = (joystickHeight - stickSize) / 2; // 30px - left position when centered (for 2D mode)
-    const maxStickTravel = stickCenterY; // can travel 30px up or down from center
-
-    // Fixed joystick position (bottom-left corner with safe area)
-    const joystickFixedX = 70;
-    const joystickFixedY = () => {
-        const defaultY = window.innerHeight - 140;
-        // Scanity: on touch the annotation navigator is a bottom bar, which
-        // the joystick's default spot overlaps, so sit 12px above it instead
-        const nav = dom.annotationNav;
-        if (!nav.classList.contains('touch') || nav.classList.contains('hidden')) {
-            return defaultY;
-        }
-        return Math.min(defaultY, nav.getBoundingClientRect().top - joystickHeight / 2 - 12);
-    };
+    // How far the knob's centre may travel from the base's centre (matches
+    // SCSS: 120px base, 34px knob), and where the base sits: bottom-left,
+    // clear of the controls row below it.
+    const maxStickTravel = 43;
+    const joystickFixedX = 76;
+    const joystickFixedY = () => window.innerHeight - 140;
 
     // Joystick touch state
     let joystickPointerId: number | null = null;
-    let joystickValueX = 0; // -1 to 1, negative = left, positive = right
-    let joystickValueY = 0; // -1 to 1, negative = forward, positive = backward
 
     // Joystick mode: '1d' for vertical only, '2d' for full directional
     let joystickMode: '1d' | '2d' = '2d';
@@ -53,13 +42,6 @@ const initJoystick = (
             dom.joystickBase.classList.toggle('mode-2d', joystickMode === '2d');
             dom.joystickBase.style.left = `${joystickFixedX}px`;
             dom.joystickBase.style.top = `${joystickFixedY()}px`;
-            // Center the stick
-            dom.joystick.style.top = `${stickCenterY}px`;
-            if (joystickMode === '2d') {
-                dom.joystick.style.left = `${stickCenterX}px`;
-            } else {
-                dom.joystick.style.left = '8px'; // Reset to 1D centered position
-            }
         } else {
             dom.joystickBase.classList.add('hidden');
         }
@@ -68,36 +50,26 @@ const initJoystick = (
     events.on('cameraMode:changed', updateJoystickVisibility);
     events.on('inputMode:changed', updateJoystickVisibility);
     events.on('gamingControls:changed', updateJoystickVisibility);
-    events.on('annotationNav:layout', updateJoystickVisibility);
     window.addEventListener('resize', updateJoystickVisibility);
+
+    // Places the knob (offset from centre, in px) and reports the matching
+    // input, normalised to -1..1: x negative = left, y negative = forward.
+    const setStick = (x: number, y: number) => {
+        dom.joystick.style.transform = `translate(${x}px, ${y}px)`;
+        events.fire('joystickInput', { x: x / maxStickTravel, y: y / maxStickTravel });
+    };
 
     // Handle joystick touch input directly on the joystick element
     const updateJoystickStick = (clientX: number, clientY: number) => {
-        const baseY = joystickFixedY();
-        // Calculate Y offset from joystick center (positive = down/backward)
-        const offsetY = clientY - baseY;
-        // Clamp to max travel and normalize to -1 to 1
-        const clampedOffsetY = Math.max(-maxStickTravel, Math.min(maxStickTravel, offsetY));
-        joystickValueY = clampedOffsetY / maxStickTravel;
-
-        // Update stick visual Y position
-        dom.joystick.style.top = `${stickCenterY + clampedOffsetY}px`;
-
-        // Handle X axis in 2D mode
-        if (joystickMode === '2d') {
-            const baseX = joystickFixedX;
-            const offsetX = clientX - baseX;
-            const clampedOffsetX = Math.max(-maxStickTravel, Math.min(maxStickTravel, offsetX));
-            joystickValueX = clampedOffsetX / maxStickTravel;
-
-            // Update stick visual X position
-            dom.joystick.style.left = `${stickCenterX + clampedOffsetX}px`;
-        } else {
-            joystickValueX = 0;
+        const rect = dom.joystickBase.getBoundingClientRect();
+        let x = joystickMode === '2d' ? clientX - (rect.left + rect.width / 2) : 0;
+        let y = clientY - (rect.top + rect.height / 2);
+        const distance = Math.hypot(x, y);
+        if (distance > maxStickTravel) {
+            x *= maxStickTravel / distance;
+            y *= maxStickTravel / distance;
         }
-
-        // Fire input event for the input controller
-        events.fire('joystickInput', { x: joystickValueX, y: joystickValueY });
+        setStick(x, y);
     };
 
     dom.joystickBase.addEventListener('pointerdown', (event: PointerEvent) => {
@@ -115,6 +87,7 @@ const initJoystick = (
 
         joystickPointerId = event.pointerId;
         dom.joystickBase.setPointerCapture(event.pointerId);
+        dom.joystickBase.classList.add('is-active');
 
         updateJoystickStick(event.clientX, event.clientY);
         event.preventDefault();
@@ -132,17 +105,10 @@ const initJoystick = (
         if (event.pointerId !== joystickPointerId) return;
 
         joystickPointerId = null;
-        joystickValueX = 0;
-        joystickValueY = 0;
+        dom.joystickBase.classList.remove('is-active');
 
-        // Reset stick to center
-        dom.joystick.style.top = `${stickCenterY}px`;
-        if (joystickMode === '2d') {
-            dom.joystick.style.left = `${stickCenterX}px`;
-        }
-
-        // Fire input event with zero values
-        events.fire('joystickInput', { x: 0, y: 0 });
+        // Spring back to centre, with zero input
+        setStick(0, 0);
 
         dom.joystickBase.releasePointerCapture(event.pointerId);
     };
@@ -164,7 +130,7 @@ const initAnnotationNav = (
     let currentIndex = 0;
 
     // Scanity: clicking the title opens a list of every annotation to jump to
-    // directly (drops down on desktop, opens upward from the touch bottom bar).
+    // directly (drops down on desktop, opens upward from the touch controls row).
     const listItems = annotations.map((annotation, index) => {
         const item = document.createElement('button');
         item.type = 'button';
@@ -210,19 +176,35 @@ const initAnnotationNav = (
         });
     };
 
+    // Scanity: on touch the navigator becomes one more pill in the bottom
+    // controls row, in place of its spacer, instead of a floating bar; on
+    // desktop it goes back to its own spot at the top of the screen.
+    const desktopParent = dom.annotationNav.parentElement;
+    const desktopNextSibling = dom.annotationNav.nextSibling;
+    const controlsRowSpacer = dom.controlsWrap.querySelector('#buttonsContainer > .spacer');
+
+    const placeNav = () => {
+        if (state.inputMode === 'touch' && controlsRowSpacer) {
+            if (dom.annotationNav.nextSibling !== controlsRowSpacer) {
+                controlsRowSpacer.before(dom.annotationNav);
+            }
+        } else if (dom.annotationNav.parentElement !== desktopParent) {
+            desktopParent.insertBefore(dom.annotationNav, desktopNextSibling);
+        }
+    };
+
     const updateMode = () => {
         if (!state.loaded) return;
         if (!state.showAnnotations) {
             dom.annotationNav.classList.add('hidden');
             setListOpen(false);
-            events.fire('annotationNav:layout');
             return;
         }
+        placeNav();
         dom.annotationNav.classList.remove('desktop', 'touch', 'hidden');
         dom.annotationNav.classList.add(state.inputMode);
         dom.annotationList.classList.remove('desktop', 'touch');
         dom.annotationList.classList.add(state.inputMode);
-        events.fire('annotationNav:layout');
     };
 
     const updateFade = () => {

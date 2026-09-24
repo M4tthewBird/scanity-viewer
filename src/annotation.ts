@@ -1,7 +1,7 @@
 import {
     CULLFACE_NONE,
     FILTER_LINEAR,
-    PIXELFORMAT_RGBA8,
+    PIXELFORMAT_SRGBA8,
     BlendState,
     Color,
     Entity,
@@ -41,6 +41,16 @@ const depthClampWgsl = `
 
 const vec = new Vec3();
 
+// Hotspot texture: canvas size, and the disc's diameter within it (a small
+// transparent margin around it). Scanity ink and muted grey, as in
+// index.scss's $clr-ink and $clr-muted.
+const HOTSPOT_TEXTURE = 128;
+const HOTSPOT_DISC = 100;
+const INK = '#101112';
+const MUTED = '#6e7479';
+// The light tone the frosted control pills read as over a scan
+const GLASS = '#eef0f1';
+
 /**
  * A script for creating interactive 3D annotations in a scene. Each annotation consists of:
  *
@@ -52,11 +62,15 @@ const vec = new Vec3();
 export class Annotation extends Script {
     static scriptName = 'annotation';
 
-    static hotspotSize = 25;
+    // Screen size of the hotspot quad in CSS px. The drawn disc fills
+    // HOTSPOT_DISC / HOTSPOT_TEXTURE of it (~28px); the rest is room for its
+    // drop shadow.
+    static hotspotSize = 36;
 
-    static hotspotColor = new Color(0.8, 0.8, 0.8);
-
-    static hoverColor = new Color(1.0, 0.4, 0.0);
+    // Emissive multiplier over the hotspot texture. White: the texture
+    // carries the real colours (see _createHotspotTexture), and the hover /
+    // selected look is a texture swap rather than a tint.
+    static hotspotColor = new Color(1, 1, 1);
 
     static parentDom: HTMLElement | null = null;
 
@@ -101,9 +115,15 @@ export class Annotation extends Script {
     hotspotDom: HTMLDivElement | null = null;
 
     /**
+     * Resting and selected (hovered or open) hotspot textures.
      * @private
      */
-    texture: Texture | null = null;
+    textures: { rest: Texture; selected: Texture } | null = null;
+
+    /**
+     * @private
+     */
+    hovered = false;
 
     /**
      * @private
@@ -116,18 +136,27 @@ export class Annotation extends Script {
      * @private
      */
     static _injectStyles(size: number) {
+        // Scanity: the tooltip is the viewer's white panel (settings panel,
+        // annotation list): near-opaque white, hairline white rim, soft
+        // shadow, Manrope inherited from the page, ink title, muted body.
         const css = `
             .pc-annotation {
                 display: block;
                 position: absolute;
-                background-color: rgba(0, 0, 0, 0.8);
-                color: white;
-                padding: 8px;
-                border-radius: 4px;
-                font-size: 14px;
-                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+                box-sizing: border-box;
+                background-color: rgba(255, 255, 255, 0.94);
+                border: 1px solid rgba(255, 255, 255, 0.9);
+                box-shadow: 0 12px 36px rgba(16, 17, 18, 0.16);
+                backdrop-filter: blur(20px);
+                -webkit-backdrop-filter: blur(20px);
+                color: #6e7479;
+                padding: 10px 14px 12px;
+                border-radius: 14px;
+                font-family: inherit;
+                font-size: 13px;
+                line-height: 1.45;
                 pointer-events: none;
-                max-width: 200px;
+                max-width: 240px;
                 word-wrap: break-word;
                 overflow-x: visible;
                 white-space: normal;
@@ -138,8 +167,14 @@ export class Annotation extends Script {
             }
 
             .pc-annotation-title {
-                font-weight: bold;
-                margin-bottom: 4px;
+                font-size: 14px;
+                font-weight: 700;
+                letter-spacing: -0.01em;
+                color: #101112;
+            }
+
+            .pc-annotation-text:not(:empty) {
+                margin-top: 3px;
             }
 
             /* Tooltip arrow */
@@ -155,12 +190,12 @@ export class Annotation extends Script {
 
             .pc-annotation.arrow-right::before {
                 left: -8px;
-                border-right: 8px solid rgba(0, 0, 0, 0.8);
+                border-right: 8px solid rgba(255, 255, 255, 0.94);
             }
 
             .pc-annotation.arrow-left::before {
                 right: -8px;
-                border-left: 8px solid rgba(0, 0, 0, 0.8);
+                border-left: 8px solid rgba(255, 255, 255, 0.94);
             }
 
             .pc-annotation-hotspot {
@@ -241,78 +276,100 @@ export class Annotation extends Script {
     }
 
     /**
-     * Creates a circular hotspot texture.
+     * Creates a circular hotspot texture in the controls' own language: the
+     * light glass tone of a control pill with a thin white rim and a grey
+     * Manrope number at rest; filled ink with a white
+     * number when selected, like an active camera toggle. Drawn at 128px so
+     * it stays crisp on high-density screens at its ~28px display size.
      * @param {AppBase} app - The PlayCanvas AppBase
      * @param {string} label - Label text to draw on the hotspot
-     * @param {number} [size] - The texture size (should be power of 2)
-     * @param {number} [borderWidth] - The border width in pixels
+     * @param {boolean} selected - Draw the selected (hovered / open) look
      * @returns {Texture} The hotspot texture
      * @private
      */
-    static _createHotspotTexture(app: AppBase, label: string, size = 64, borderWidth = 6) {
-        // Create canvas for hotspot texture
+    static _createHotspotTexture(app: AppBase, label: string, selected: boolean) {
+        const size = HOTSPOT_TEXTURE;
         const canvas = document.createElement('canvas');
         canvas.width = size;
         canvas.height = size;
         const ctx = canvas.getContext('2d');
 
-        // First clear with stroke color at zero alpha
-        ctx.fillStyle = 'white';
-        ctx.globalAlpha = 0;
-        ctx.fillRect(0, 0, size, size);
-        ctx.globalAlpha = 1.0;
+        const center = size / 2;
+        const radius = HOTSPOT_DISC / 2;
+        const disc = () => {
+            ctx.beginPath();
+            ctx.arc(center, center, radius, 0, Math.PI * 2);
+        };
 
-        // Draw dark circle with light border
-        const centerX = size / 2;
-        const centerY = size / 2;
-        const radius = size / 2 - 4; // Leave space for border
+        // Everything here is opaque on purpose. The hotspot draws before the
+        // splats and writes depth, so any semi-transparent texel (a
+        // translucent body, a soft drop shadow) blends with the empty
+        // background instead of the scan and shows as a dark patch or halo.
 
-        // Draw main circle
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-        ctx.fillStyle = 'black';
+        // Thin white rim, as on every control pill, as the outer edge
+        disc();
+        ctx.fillStyle = '#ffffff';
         ctx.fill();
 
-        // Draw border
+        // Body: the controls' glass tone at rest, ink when selected (the
+        // active camera toggle)
         ctx.beginPath();
-        ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-        ctx.lineWidth = borderWidth;
-        ctx.strokeStyle = 'white';
-        ctx.stroke();
+        ctx.arc(center, center, radius - 3.5, 0, Math.PI * 2);
+        ctx.fillStyle = selected ? INK : GLASS;
+        ctx.fill();
 
-        // Draw text
-        ctx.font = 'bold 32px Arial';
+        // Number, Manrope bold, optically centred: the control icons' grey
+        // at rest, white when selected
+        ctx.font = `700 ${label.length > 1 ? 46 : 54}px Manrope, system-ui, sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillStyle = 'white';
-        ctx.fillText(label, Math.floor(canvas.width / 2), Math.floor(canvas.height / 2) + 1);
+        ctx.fillStyle = selected ? '#ffffff' : MUTED;
+        ctx.fillText(label, center, center + 3);
 
-        // get pixel data
-        const imageData = ctx.getImageData(0, 0, size, size);
-        const data = imageData.data;
+        const { data } = ctx.getImageData(0, 0, size, size);
 
-        // set the color channel of semitransparent pixels to white so the blending at
-        // the edges is correct
-        for (let i = 0; i < data.length; i += 4) {
-            const a = data[i + 3];
-            if (a < 255) {
-                data[i] = 255;
-                data[i + 1] = 255;
-                data[i + 2] = 255;
-            }
-        }
-
-        const texture = new Texture(app.graphicsDevice, {
+        // sRGB format: canvas colours are sRGB, so the ink stays ink instead
+        // of being lifted to grey by the output gamma
+        return new Texture(app.graphicsDevice, {
             width: size,
             height: size,
-            format: PIXELFORMAT_RGBA8,
+            format: PIXELFORMAT_SRGBA8,
             magFilter: FILTER_LINEAR,
             minFilter: FILTER_LINEAR,
             mipmaps: false,
             levels: [new Uint8Array(data.buffer)]
         });
+    }
 
-        return texture;
+    /**
+     * (Re)draws this hotspot's textures and points its materials at the one
+     * matching the current state.
+     * @private
+     */
+    _buildTextures() {
+        this.textures?.rest.destroy();
+        this.textures?.selected.destroy();
+        this.textures = {
+            rest: Annotation._createHotspotTexture(this.app, this.label, false),
+            selected: Annotation._createHotspotTexture(this.app, this.label, true)
+        };
+        this._applyTexture();
+    }
+
+    /**
+     * @private
+     */
+    _applyTexture() {
+        const selected = this.hovered || Annotation.activeAnnotation === this;
+        const texture = selected ? this.textures.selected : this.textures.rest;
+        this.materials.forEach((material) => {
+            if (material.emissiveMap !== texture) {
+                material.emissiveMap = texture;
+                material.opacityMap = texture;
+                material.update();
+            }
+        });
+        this.app.renderNextFrame = true;
     }
 
     /**
@@ -334,9 +391,12 @@ export class Annotation extends Script {
         material.emissiveMap = texture;
         material.opacityMap = texture;
 
-        // Alpha properties
+        // Alpha properties. The depth-tested base pass drops half-transparent
+        // edge texels (they would blend with the empty background, as the
+        // splats draw after it); the overlay pass, drawn after the splats,
+        // keeps them for a smooth edge.
         material.opacity = opacity;
-        material.alphaTest = 0.01;
+        material.alphaTest = depthWrite ? 0.5 : 0.01;
         material.blendState = new BlendState(
             true,
             BLENDEQUATION_ADD,
@@ -370,22 +430,42 @@ export class Annotation extends Script {
         // Ensure static resources are initialized
         Annotation._initializeStatic(this.app);
 
-        // Create texture
-        this.texture = Annotation._createHotspotTexture(this.app, this.label);
+        // Create textures
+        this.textures = {
+            rest: Annotation._createHotspotTexture(this.app, this.label, false),
+            selected: Annotation._createHotspotTexture(this.app, this.label, true)
+        };
 
         // Create material the base and overlay material
         this.materials = [
-            Annotation._createHotspotMaterial(this.texture, {
+            Annotation._createHotspotMaterial(this.textures.rest, {
                 opacity: 1,
                 depthTest: true,
                 depthWrite: true
             }),
-            Annotation._createHotspotMaterial(this.texture, {
+            Annotation._createHotspotMaterial(this.textures.rest, {
                 opacity: 0.25,
                 depthTest: false,
                 depthWrite: false
             })
         ];
+
+        // The numbers are drawn in Manrope, which the page loads from Google
+        // Fonts; if it isn't ready yet the first draw fell back, so redraw
+        // once it arrives.
+        const hotspotFont = '700 54px Manrope';
+        if (!document.fonts.check(hotspotFont)) {
+            document.fonts
+                .load(hotspotFont)
+                .then(() => {
+                    if (this.textures) {
+                        this._buildTextures();
+                    }
+                })
+                .catch(() => {
+                    // keep the fallback-font textures
+                });
+        }
 
         const base = new Entity('base');
         const baseMi = new MeshInstance(Annotation.mesh, this.materials[0]);
@@ -452,8 +532,9 @@ export class Annotation extends Script {
             this.materials.forEach((mat) => mat.destroy());
             this.materials = [];
 
-            this.texture.destroy();
-            this.texture = null;
+            this.textures.rest.destroy();
+            this.textures.selected.destroy();
+            this.textures = null;
         });
 
         this.app.on('prerender', () => {
@@ -497,10 +578,8 @@ export class Annotation extends Script {
      * @private
      */
     setHover(hover: boolean) {
-        this.materials.forEach((material) => {
-            material.emissive.copy(hover ? Annotation.hoverColor : Annotation.hotspotColor);
-            material.update();
-        });
+        this.hovered = hover;
+        this._applyTexture();
         this.fire('hover', hover);
     }
 
@@ -508,7 +587,12 @@ export class Annotation extends Script {
      * @private
      */
     showTooltip() {
+        const previous = Annotation.activeAnnotation;
         Annotation.activeAnnotation = this;
+        if (previous && previous !== this) {
+            previous._applyTexture();
+        }
+        this._applyTexture();
         Annotation.tooltipDom.style.visibility = 'visible';
         Annotation.tooltipDom.style.opacity = '1';
         Annotation.titleDom.textContent = this.title;
@@ -525,6 +609,7 @@ export class Annotation extends Script {
      */
     hideTooltip() {
         Annotation.activeAnnotation = null;
+        this._applyTexture();
         Annotation.tooltipDom.style.opacity = '0';
 
         // Wait for fade out before hiding
