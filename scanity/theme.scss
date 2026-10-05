@@ -1,0 +1,944 @@
+// ---------------------------------------------------------------------------
+// Scanity theme over the upstream viewer
+// ---------------------------------------------------------------------------
+// Compiled after src/index.scss (see scanity/index.scss) and restyles its markup without
+// editing it. Every rule sits under `:root .sse-viewer`, one class more specific than
+// upstream's `.sse-viewer`, so these win wherever the selectors otherwise match. The nesting
+// follows upstream's where a rule needs to reach as deep as theirs does.
+//
+// Values from scanity.cz's design tokens (scanity-website DESIGN.md), so the viewer reads as the
+// same product rather than a third-party player:
+//   ink        #101112  dominant: text, icons, active fills
+//   ink-soft   #25272a  small dark chips (tooltips, time badge)
+//   muted      #6e7479  resting icon and secondary text tone
+//   scan-blue  #246bfd  the one accent, used sparingly: hover, focus, and live or animated
+//                       elements (loading bar, timeline handle, toggle switches). Persistent
+//                       "active" states (the camera mode toggle) use ink, like the site's
+//                       dark button.
+// Surfaces are frosted white "glass" pills and panels with a hairline white rim.
+// ---------------------------------------------------------------------------
+
+$ink: #101112;
+$ink-soft: #25272a;
+$white: #fff;
+$muted: #6e7479;
+$faint: #9aa0a4;
+$scan-blue: #246bfd;
+
+$font:
+    'Manrope',
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    'Helvetica Neue',
+    Arial,
+    sans-serif;
+
+$glass-pill: rgba($white, 0.72);
+$glass-panel: rgba($white, 0.85);
+$glass-modal: rgba($white, 0.94);
+$rim: 1px solid rgba($white, 0.9);
+$hairline: rgba($ink, 0.08);
+$pill-shadow: 0 8px 30px rgba($ink, 0.07);
+$panel-shadow: 0 20px 50px rgba($ink, 0.12);
+$modal-shadow: 0 35px 100px rgba($ink, 0.18);
+$safe-top: max(16px, env(safe-area-inset-top));
+$safe-left: max(16px, env(safe-area-inset-left));
+$safe-bottom: max(16px, env(safe-area-inset-bottom));
+
+// narrower than this, the touch annotation navigator gets its own row above the toolbar
+$nav-own-row-below: 560px;
+
+@mixin glass($bkg, $blur: 18px) {
+    border: $rim;
+    background-color: $bkg;
+    backdrop-filter: blur($blur);
+    -webkit-backdrop-filter: blur($blur);
+}
+
+// a pill-shaped button in a panel: settings actions, modal buttons
+@mixin pill-button {
+    height: 34px;
+    padding: 0 20px;
+    border: 1px solid rgba($ink, 0.1);
+    border-radius: 100px;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    color: $muted;
+    background-color: rgba($ink, 0.03);
+}
+
+:root .sse-viewer {
+    // Upstream's theme tokens, re-pointed at Scanity's palette. Upstream's surfaces are dark;
+    // the rules below repaint the ones whose light-on-dark details are not tokens.
+    --sse-text: #{$muted};
+    --sse-text-light: #{$ink};
+    --sse-text-dark: #{$muted};
+    --sse-text-darkest: #{$faint};
+    --sse-accent: #{$scan-blue};
+    --sse-grip: #{$scan-blue};
+    --sse-bkg: #{$white};
+    --sse-bkg-dark: #{$ink-soft};
+    --sse-bkg-darkest: #{$ink};
+    --sse-bkg-light: #e9ecef;
+
+    font-family: $font;
+
+    button {
+        font-family: inherit;
+    }
+
+    // ---- brand -----------------------------------------------------------
+
+    // upstream's SuperSplat badge for third-party embeds: the Scanity logo stands in its place
+    .sse-viewerBranding {
+        display: none !important;
+    }
+
+    .scn-brandLogo {
+        position: absolute;
+        top: $safe-top;
+        left: $safe-left;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 18px 9px 14px;
+        border-radius: 100px;
+        @include glass($glass-pill);
+        box-shadow: $pill-shadow;
+        text-decoration: none;
+        transition:
+            transform 150ms ease,
+            box-shadow 150ms ease;
+
+        &:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 34px rgba($ink, 0.1);
+        }
+
+        > svg {
+            display: block;
+            height: 19px;
+            width: auto;
+            color: $scan-blue;
+        }
+
+        > span {
+            font-size: 1.15rem;
+            font-weight: 400;
+            letter-spacing: 0.035em;
+            -webkit-text-stroke: 0.25px $ink;
+            color: $ink;
+        }
+    }
+
+    // ---- shared pieces ---------------------------------------------------
+
+    .sse-key {
+        min-width: 24px;
+        height: 24px;
+        padding: 0 7px;
+        border: 1px solid rgba($ink, 0.14);
+        border-radius: 6px;
+        box-shadow: 0 1.5px 0 rgba($ink, 0.14);
+        background-color: $white;
+        color: $ink;
+        font-size: 0.72rem;
+        font-weight: 700;
+        line-height: 1;
+    }
+
+    .sse-panelButton {
+        width: 32px;
+        height: 32px;
+        border: 1px solid rgba($ink, 0.12);
+        border-radius: 50%;
+        color: $muted;
+        background-color: rgba($white, 0.5);
+
+        &:hover {
+            color: $ink;
+            background-color: $white;
+        }
+    }
+
+    // ---- loading ---------------------------------------------------------
+
+    .sse-loadingWrap {
+        width: min(320px, calc(100% - 32px));
+        box-sizing: border-box;
+        padding: 16px 20px;
+        border-radius: 16px;
+        @include glass($glass-pill);
+        box-shadow: $panel-shadow;
+
+        > .sse-loadingText {
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            color: $ink;
+            text-shadow: none;
+        }
+
+        // filled from scanity/loading-bar.ts
+        > .sse-loadingBar {
+            height: 6px;
+            margin-top: 10px;
+            border-radius: 3px;
+        }
+    }
+
+    // ---- toolbar ---------------------------------------------------------
+
+    .sse-controlsWrap {
+        > .sse-timelineContainer {
+            > .sse-line {
+                border-bottom-color: rgba($ink, 0.12);
+            }
+
+            > .sse-handle {
+                border-color: $white;
+                box-shadow: 0 2px 8px rgba($ink, 0.25);
+            }
+
+            > .sse-time {
+                padding: 2px 6px;
+                border-radius: 100px;
+                font-weight: 600;
+                color: $white;
+                background-color: rgba($ink-soft, 0.9);
+            }
+        }
+
+        > .sse-buttonsContainer {
+            .sse-buttonGroup {
+                border-radius: 100px;
+                @include glass($glass-pill);
+                box-shadow: $pill-shadow;
+                overflow: hidden;
+            }
+
+            .sse-controlButton {
+                transition:
+                    color 150ms ease,
+                    background-color 150ms ease;
+
+                &:hover {
+                    background-color: rgba($ink, 0.05);
+                }
+
+                // Scanity's icons are flat and single-colour, so drop the dark outline
+                // upstream draws for light icons over a photo
+                > svg > g.sse-stroke {
+                    display: none;
+                }
+
+                &.sse-active:not(.sse-toggle) {
+                    background-color: rgba($scan-blue, 0.1);
+                }
+
+                // the camera mode toggle: the active half is ink, as the site's dark button
+                &.sse-toggle {
+                    background: linear-gradient(90deg, transparent 0%, transparent 50%, $ink 50%, $ink 100%);
+                    background-size: 200% 100%;
+                    background-repeat: no-repeat;
+
+                    &.sse-active {
+                        color: $white;
+
+                        &:hover {
+                            color: $white;
+                        }
+                    }
+
+                    &.sse-left {
+                        border-radius: 100px 0 0 100px;
+                    }
+
+                    &.sse-right {
+                        border-radius: 0 100px 100px 0;
+                    }
+                }
+            }
+        }
+    }
+
+    // ---- settings panel --------------------------------------------------
+
+    .sse-settingsPanel {
+        @include glass($glass-panel, 20px);
+        box-shadow: $panel-shadow;
+
+        > .sse-settingsGroup {
+            &:not(:last-child) {
+                border-bottom-color: $hairline;
+            }
+
+            > .sse-settingsRow {
+                > button {
+                    @include pill-button;
+                    transition:
+                        background-color 250ms ease,
+                        color 250ms ease;
+
+                    &:hover {
+                        color: $white;
+                        background-color: $ink;
+                    }
+                }
+
+                > div {
+                    &:hover {
+                        color: $ink;
+                    }
+
+                    &.sse-toggleSwitch {
+                        .sse-toggleTrack {
+                            background-color: rgba($ink, 0.12);
+
+                            .sse-toggleThumb {
+                                background-color: $white;
+                                box-shadow: 0 1px 4px rgba($ink, 0.3);
+                            }
+                        }
+
+                        &.sse-active .sse-toggleTrack {
+                            background-color: $scan-blue;
+
+                            .sse-toggleThumb {
+                                background-color: $white;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ---- controls panel (the current mode's controls) --------------------
+
+    .sse-controlsHint {
+        padding: 10px 10px 10px 14px;
+        @include glass($glass-panel, 20px);
+        box-shadow: $panel-shadow;
+
+        > .sse-controlsHintHeader {
+            > .sse-controlsHintIcon {
+                fill: $scan-blue;
+            }
+
+            > .sse-controlsHintTitles {
+                > .sse-controlsHintTitle {
+                    font-size: 0.92rem;
+                    font-weight: 600;
+                    letter-spacing: -0.02em;
+                    color: $ink;
+                }
+
+                > .sse-controlsHintSubtitle {
+                    color: $muted;
+                }
+            }
+        }
+
+        > .sse-controlsHintRows {
+            border-top-color: $hairline;
+
+            > .sse-controlsHintItem {
+                min-height: 32px;
+
+                > .sse-controlsHintAction {
+                    font-size: 0.82rem;
+                    font-weight: 600;
+                    letter-spacing: -0.01em;
+                    color: $ink;
+                }
+            }
+
+            > .sse-divider {
+                background-color: $hairline;
+            }
+        }
+
+        .sse-mouse > .sse-mouseIcon {
+            > .sse-mouseBody {
+                stroke: rgba($ink, 0.55);
+            }
+
+            > .sse-mouseSplit {
+                stroke: rgba($ink, 0.3);
+            }
+
+            > .sse-mouseActive {
+                fill: $scan-blue;
+            }
+        }
+
+        .sse-gesture {
+            padding: 3px 9px;
+            border: 0;
+            border-radius: 8px;
+            background-color: rgba($ink, 0.06);
+            color: $ink;
+            font-size: 0.74rem;
+            font-weight: 700;
+        }
+
+        .sse-or {
+            color: $faint;
+        }
+    }
+
+    // ---- info panel ------------------------------------------------------
+
+    .sse-infoPanel {
+        animation: scn-fade-in 250ms ease both;
+
+        &::before {
+            background: radial-gradient(120% 90% at 50% 40%, rgba($ink, 0.22), rgba($ink, 0.56));
+            backdrop-filter: blur(2px);
+            -webkit-backdrop-filter: blur(2px);
+        }
+
+        > .sse-infoPanelContent {
+            width: 360px;
+            padding: 26px 22px 20px;
+            border-radius: 24px;
+            @include glass($glass-modal, 24px);
+            box-shadow: $modal-shadow;
+            animation: scn-pop-in 350ms cubic-bezier(0.22, 0.68, 0, 1) both;
+
+            > .sse-viewerTitle {
+                > .scn-viewerLogo {
+                    margin-bottom: 4px;
+                    color: $scan-blue;
+
+                    > svg {
+                        display: block;
+                        height: 40px;
+                        width: auto;
+                    }
+                }
+
+                > .sse-title-name {
+                    font-size: 1.2rem;
+                    font-weight: 500;
+                    letter-spacing: -0.02em;
+                    color: $ink;
+                }
+            }
+
+            > .sse-infoGpu {
+                border-radius: 12px;
+                background-color: rgba($ink, 0.05);
+            }
+
+            > .sse-infoLinks > .sse-infoLink {
+                border-radius: 12px;
+
+                &:hover {
+                    color: $ink;
+                    background-color: rgba($ink, 0.05);
+                }
+            }
+
+            > .sse-infoShortcuts {
+                border-top-color: $hairline;
+
+                > h1 {
+                    font-size: 11px;
+                    font-weight: 700;
+                    letter-spacing: 0.1em;
+                    color: $scan-blue;
+                }
+
+                > .sse-infoShortcut {
+                    min-height: 34px;
+                    font-size: 0.86rem;
+                    font-weight: 600;
+                    color: $ink;
+                }
+            }
+        }
+    }
+
+    // ---- touch joystick ("Joystick 2a") -------------------------------------
+    // Upstream's joystick, drawn as a softened frosted ring with direction marks and a small
+    // frosted knob, light enough to spot over a bright scene; held (scn-held, from
+    // scanity/joystick.ts) the ring comes up to full strength. Upstream's geometry is kept, as
+    // its script positions the knob in pixels: a 100px base (56px wide in 1D mode) and a 40px
+    // knob element, drawn here as 34px.
+
+    .sse-joystickBase {
+        border: 0;
+        background: none;
+        cursor: grab;
+
+        // the ring, scaled down at rest
+        &::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            box-sizing: border-box;
+            border: 1px solid rgba($white, 0.5);
+            background-color: rgba($white, 0.14);
+            // up and down marks; 2D mode adds left and right below
+            background-image:
+                url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 5l4-4 4 4' fill='none' stroke='white' stroke-opacity='.8' stroke-width='1.5'/%3E%3C/svg%3E"),
+                url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='white' stroke-opacity='.8' stroke-width='1.5'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position:
+                50% 10px,
+                50% calc(100% - 10px);
+            opacity: 0.75;
+            transform: scale(0.8);
+            transition:
+                opacity 180ms ease,
+                transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+            pointer-events: none;
+        }
+
+        &.sse-mode-2d {
+            background: none;
+
+            &::before {
+                background-image:
+                    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 5l4-4 4 4' fill='none' stroke='white' stroke-opacity='.8' stroke-width='1.5'/%3E%3C/svg%3E"),
+                    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='white' stroke-opacity='.8' stroke-width='1.5'/%3E%3C/svg%3E"),
+                    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='10'%3E%3Cpath d='M5 1L1 5l4 4' fill='none' stroke='white' stroke-opacity='.8' stroke-width='1.5'/%3E%3C/svg%3E"),
+                    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='10'%3E%3Cpath d='M1 1l4 4-4 4' fill='none' stroke='white' stroke-opacity='.8' stroke-width='1.5'/%3E%3C/svg%3E");
+                background-position:
+                    50% 10px,
+                    50% calc(100% - 10px),
+                    10px 50%,
+                    calc(100% - 10px) 50%;
+            }
+        }
+
+        // the knob: upstream's 40px element, drawn 34px and frosted
+        > .sse-joystick {
+            background: none;
+            box-shadow: none;
+
+            &::after {
+                content: '';
+                position: absolute;
+                inset: 3px;
+                box-sizing: border-box;
+                border-radius: 50%;
+                border: 1px solid rgba($white, 0.6);
+                background: rgba($white, 0.78);
+                box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+                backdrop-filter: blur(10px);
+                -webkit-backdrop-filter: blur(10px);
+                opacity: 0.85;
+                transition: opacity 400ms ease 120ms;
+            }
+        }
+
+        &.scn-held {
+            cursor: grabbing;
+
+            &::before {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            > .sse-joystick::after {
+                opacity: 1;
+                transition: opacity 150ms ease;
+            }
+        }
+    }
+
+    // ---- xr modal --------------------------------------------------------
+
+    .sse-xrModal {
+        background-color: rgba($ink, 0.32);
+        backdrop-filter: blur(2px);
+        -webkit-backdrop-filter: blur(2px);
+
+        > .sse-xrModalContent {
+            border-radius: 20px;
+            @include glass($glass-modal, 24px);
+            box-shadow: 0 35px 100px rgba($ink, 0.13);
+
+            > h2 {
+                font-weight: 700;
+            }
+
+            > p {
+                line-height: 1.5;
+            }
+
+            > .sse-xrModalButtons > button {
+                @include pill-button;
+
+                &:hover {
+                    color: $ink;
+                    background-color: rgba($ink, 0.08);
+                }
+
+                &.sse-xrModalOk {
+                    color: $white;
+                    background-color: $ink;
+                    border-color: $ink;
+
+                    &:hover {
+                        background-color: $scan-blue;
+                        border-color: $scan-blue;
+                    }
+                }
+            }
+        }
+    }
+
+    // ---- tooltips on the toolbar -----------------------------------------
+
+    .sse-tooltip {
+        border-radius: 6px;
+        padding: 4px 8px;
+        font-weight: 600;
+        color: $white;
+        background-color: $ink-soft;
+    }
+
+    // ---- annotations: hotspots and their panel -------------------------------
+
+    .sse-annotations {
+        // a disc in the controls' language: the light glass tone of a control pill with a
+        // white rim and a grey number at rest; filled ink with a white number when pointed at
+        // or selected, like the active camera toggle
+        > .sse-annotation-hotspots > .sse-annotation-hotspot {
+            width: 28px;
+            height: 28px;
+            border: 1.5px solid $white;
+            font-size: 12px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            color: $muted;
+            background-color: rgba($white, 0.86);
+            box-shadow: 0 2px 10px rgba($ink, 0.28);
+
+            &:hover,
+            &.sse-active {
+                border-color: $white;
+                color: $white;
+                background-color: $ink;
+            }
+        }
+
+        // the viewer's white panel: near-opaque white, white rim, soft shadow, ink title,
+        // muted body
+        > .sse-annotation {
+            --sse-annotation-bkg: rgba(255, 255, 255, 0.94);
+
+            padding: 12px 14px 13px;
+            border-radius: 14px;
+            border: $rim;
+            box-shadow: $panel-shadow;
+            font-size: 0.8rem;
+            line-height: 1.55;
+            color: $muted;
+
+            > .sse-annotation-title {
+                font-size: 0.92rem;
+                font-weight: 600;
+                letter-spacing: -0.01em;
+                color: $ink;
+            }
+
+            &:has(> .sse-annotation-text:empty) {
+                padding-bottom: 12px;
+            }
+        }
+    }
+
+    // ---- annotation navigator ----------------------------------------------
+
+    .sse-annotationNav {
+        > button {
+            color: $muted;
+
+            > svg > g.sse-stroke {
+                display: none;
+            }
+        }
+
+        // top centre on desktop; on touch, a pill in the controls row (moved there by
+        // scanity/annotation-list.ts). Both are glass pills
+        &.sse-desktop,
+        &.sse-touch {
+            border-radius: 100px;
+            @include glass($glass-pill);
+            box-shadow: $pill-shadow;
+            overflow: hidden;
+
+            > button {
+                width: 34px;
+                height: 34px;
+                background-color: transparent;
+
+                // a soft round glow rather than a square block beside the title
+                &:hover,
+                &:active {
+                    color: $ink;
+                    background-color: transparent;
+                    background-image: radial-gradient(circle closest-side, rgba($white, 0.95), rgba($white, 0));
+                }
+            }
+
+            // the title opens the annotation list, selected or not
+            > .sse-annotationInfo {
+                pointer-events: auto;
+                cursor: pointer;
+                display: flex;
+                gap: 7px;
+                width: 240px;
+                padding: 0 10px;
+                outline: none;
+
+                &:hover,
+                &:focus-visible,
+                &[aria-expanded='true'] {
+                    background-color: transparent;
+                    background-image: linear-gradient(
+                        90deg,
+                        rgba($white, 0) 0%,
+                        rgba($white, 0.95) 30%,
+                        rgba($white, 0.95) 70%,
+                        rgba($white, 0) 100%
+                    );
+                }
+
+                // the number, drawn like a resting hotspot
+                // (upstream styles it for desktop only; the touch bar shows it too)
+                > .sse-annotationNavNumber {
+                    flex-shrink: 0;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    box-sizing: border-box;
+                    min-width: 20px;
+                    height: 20px;
+                    padding: 0 5px;
+                    border-radius: 10px;
+                    border: 1px solid rgba($ink, 0.12);
+                    font-size: 11px;
+                    font-weight: 700;
+                    color: $muted;
+                    background-color: $white;
+
+                    &:empty {
+                        display: none;
+                    }
+                }
+
+                > .sse-annotationNavTitle {
+                    min-width: 0;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    font-size: 13px;
+                    font-weight: 600;
+                    color: $ink;
+                }
+
+                > .scn-annotationChevron {
+                    flex-shrink: 0;
+                    fill: none;
+                    stroke: $muted;
+                    stroke-width: 2.5;
+                    stroke-linecap: round;
+                    stroke-linejoin: round;
+                    transition: transform 200ms ease;
+                }
+
+                &[aria-expanded='true'] > .scn-annotationChevron {
+                    transform: rotate(180deg);
+                }
+            }
+        }
+
+        &.sse-touch {
+            position: relative;
+            top: auto;
+            left: auto;
+            width: auto;
+            height: auto;
+            display: flex;
+            align-items: center;
+            flex: 1 1 0;
+            min-width: 0;
+            max-width: 320px;
+            margin-right: auto;
+
+            > button {
+                position: static;
+                transform: none;
+                flex-shrink: 0;
+                border-radius: 0;
+            }
+
+            > .sse-annotationInfo {
+                flex: 1;
+                align-self: stretch;
+                align-items: center;
+                justify-content: center;
+                width: auto;
+                min-width: 0;
+                padding: 0 6px;
+                white-space: nowrap;
+            }
+        }
+    }
+
+    // With the navigator in the controls row, it takes over the spacer's job. A phone in
+    // portrait has no room for it beside the toolbar's groups, so there it takes a row of its
+    // own above them, and the panels that open above the toolbar move up by that row.
+    .sse-buttonsContainer:has(> .sse-annotationNav.sse-touch:not(.sse-hidden)) {
+        flex-wrap: wrap;
+        row-gap: 8px;
+    }
+
+    @media (min-width: $nav-own-row-below) {
+        .sse-buttonsContainer:has(> .sse-annotationNav.sse-touch:not(.sse-hidden)) > .sse-spacer {
+            display: none;
+        }
+    }
+
+    @media (max-width: ($nav-own-row-below - 1px)) {
+        .sse-buttonsContainer > .sse-annotationNav.sse-touch {
+            order: -1;
+            flex: 1 1 100%;
+            max-width: none;
+            margin-right: 0;
+        }
+
+        &:has(.sse-annotationNav.sse-touch:not(.sse-hidden)) {
+            .sse-controlsHint,
+            .sse-settingsPanel {
+                bottom: calc(#{$safe-bottom} + 112px);
+            }
+
+            .sse-joystickBase {
+                bottom: 172px;
+            }
+
+            .scn-annotationList.scn-touch {
+                bottom: calc(#{$safe-bottom} + 86px);
+                width: auto;
+                right: max(16px, env(safe-area-inset-right));
+                max-width: none;
+            }
+        }
+    }
+
+    // ---- annotation list ---------------------------------------------------
+    // drops down under the desktop navigator, or opens upward from the touch one in the
+    // controls row, aligned to its left edge (scanity/annotation-list.ts)
+
+    .scn-annotationList {
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 308px;
+        max-width: calc(100% - 32px);
+        max-height: min(360px, 60%);
+        box-sizing: border-box;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        touch-action: pan-y;
+        padding: 6px;
+        border-radius: 16px;
+        @include glass($glass-panel, 20px);
+        box-shadow: $panel-shadow;
+
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+
+        &.scn-desktop {
+            top: calc(#{$safe-top} + 44px);
+        }
+
+        &.scn-touch {
+            left: $safe-left;
+            bottom: calc(#{$safe-bottom} + 44px);
+            transform: none;
+            max-height: min(360px, 50%);
+
+            > button {
+                min-height: 44px;
+            }
+        }
+
+        > button {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+            min-height: 34px;
+            padding: 6px 10px;
+            border: 0;
+            border-radius: 10px;
+            cursor: pointer;
+            text-align: left;
+            font-size: 13px;
+            font-weight: 500;
+            touch-action: pan-y;
+            color: $ink-soft;
+            background-color: transparent;
+
+            > .scn-annotationListIndex {
+                flex-shrink: 0;
+                min-width: 18px;
+                font-size: 11px;
+                font-weight: 600;
+                font-variant-numeric: tabular-nums;
+                color: $faint;
+            }
+
+            > .scn-annotationListTitle {
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            &:hover,
+            &:focus-visible {
+                outline: none;
+                background-color: rgba($ink, 0.05);
+            }
+
+            &:active {
+                background-color: rgba($ink, 0.08);
+            }
+
+            &.scn-active {
+                font-weight: 600;
+                color: $scan-blue;
+                background-color: rgba($scan-blue, 0.08);
+
+                > .scn-annotationListIndex {
+                    color: $scan-blue;
+                }
+            }
+        }
+    }
+}
+
+@keyframes scn-fade-in {
+    from {
+        opacity: 0;
+    }
+}
+
+@keyframes scn-pop-in {
+    from {
+        opacity: 0;
+        transform: translate(-50%, calc(-50% + 12px)) scale(0.98);
+    }
+}

@@ -1,3 +1,5 @@
+// SCANITY: Czech (src/locales/cs.json). Offered upstream; drop this and the cs entry below once it lands there.
+import csJson from './locales/cs.json';
 import deJson from './locales/de.json';
 import enJson from './locales/en.json';
 import esJson from './locales/es.json';
@@ -13,6 +15,7 @@ type Dictionary = Record<string, string>;
 const en: Dictionary = enJson;
 
 const dictionaries: Record<string, Dictionary> = {
+    cs: csJson, // SCANITY
     de: deJson,
     en,
     es: esJson,

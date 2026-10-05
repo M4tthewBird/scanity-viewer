@@ -1,0 +1,40 @@
+<!doctype html>
+<!--
+    Embed test page: the viewer in a full-page iframe, as a customer's page would hold it.
+    /tester.html?id=living_room embeds that scene from this same build; any other query
+    parameters are passed on to the viewer (e.g. ?id=ikka_gym&lang=en).
+-->
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+        />
+        <base href="" />
+        <title>Scanity Viewer – embed test</title>
+        <style>
+            html,
+            body {
+                margin: 0;
+                /* 100vh leaves a gap on mobile browsers as the address bar shows and hides;
+                   100dvh tracks the visible viewport, with vh as the fallback */
+                height: 100vh;
+                height: 100dvh;
+            }
+
+            iframe {
+                display: block;
+                border: 0;
+            }
+        </style>
+    </head>
+    <body>
+        <iframe id="viewer" width="100%" height="100%" allow="fullscreen; xr-spatial-tracking"></iframe>
+        <script>
+            const params = new URLSearchParams(location.search);
+            if (!params.has('id')) params.set('id', 'living_room');
+            document.getElementById('viewer').src = `./index.html?${params}`;
+        </script>
+    </body>
+</html>

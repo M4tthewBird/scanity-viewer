@@ -1,0 +1,8 @@
+# viewer.scanity.cz: the Scanity build (rollup.scanity.mjs), not upstream's public/.
+# Settings here override the ones in the Netlify UI.
+[build]
+  command = "npm run scanity:build"
+  publish = "site"
+
+[build.environment]
+  NODE_VERSION = "24"

@@ -1,0 +1,213 @@
+<!doctype html>
+<!--
+    Scanity's page around the SuperSplat viewer. Upstream's own page is src/index.html; this one
+    replaces it in the Scanity build (rollup.scanity.mjs) and differs from it in three ways:
+      - "?id=<scene>" resolves every asset from the scene's folder in the R2 bucket
+      - mirrors.json is detected like collision.glb, and a scene with mirrors renders on WebGL
+      - Manrope and the Scanity background, so nothing flashes before the viewer paints
+    Everything else (the URL parameters and the options they map to) follows src/index.html.
+    When updating upstream, diff src/index.html between the two tags and carry any change in its
+    option block over to the `sseOptions` block below.
+-->
+<html lang="cs">
+    <head>
+        <title>Scanity Viewer</title>
+        <meta charset="UTF-8" />
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+        />
+        <base href="" />
+        <!-- Matches the Manrope loading on scanity.cz; the theme falls back to the system stack -->
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap"
+            rel="stylesheet"
+        />
+        <link rel="stylesheet" href="./index.css" />
+
+        <style>
+            html,
+            body {
+                height: 100%;
+                margin: 0;
+                overflow: hidden;
+            }
+
+            /* scanity.cz's .demo-viewer-frame idle background, so there is no seam before the
+               poster or the scene has painted */
+            body {
+                background: linear-gradient(145deg, #dfe4e7, #f9fafb);
+            }
+        </style>
+
+        <script type="module">
+            // Assigned synchronously, as a pending promise, so the app script below always finds
+            // it while this one is still probing the scene folder. Nothing that can throw or
+            // await may go above this line.
+            window.sseReady = (async () => {
+                const createImage = (url) => {
+                    const img = new Image();
+                    img.src = url;
+                    return img;
+                };
+
+                const url = new URL(location.href);
+
+                // "?id=" shorthand, so an embed is just
+                //   <iframe src="https://viewer.scanity.cz/?id=living_room">
+                // Each scene lives in its own folder in the R2 bucket "scanity-scenes", named
+                // after the id: one splat file, settings.json, and optionally poster.jpg,
+                // collision.glb and mirrors.json. Explicit ?content= / ?settings= / ?poster= /
+                // ?collision= / ?mirrors= always win over the id.
+                //
+                // Public R2 dev url: swap for a custom domain (e.g. cdn.scanity.cz) later;
+                // nothing else needs to change when you do.
+                const SCENES_BASE = 'https://pub-4bc2a2ec31ea4d588e494300f6ef5557.r2.dev';
+                const id = url.searchParams.get('id');
+                const sceneFolder = id ? `${SCENES_BASE}/${encodeURIComponent(id)}` : null;
+
+                // localStorage can be denied (some embeds, private modes); the lookups then just
+                // run every time
+                const cacheGet = (key) => {
+                    try {
+                        return localStorage.getItem(key);
+                    } catch {
+                        return null;
+                    }
+                };
+                const cacheSet = (key, value) => {
+                    try {
+                        localStorage.setItem(key, value);
+                    } catch {
+                        // nothing to do: the next visit probes again
+                    }
+                };
+
+                const exists = async (candidateUrl) => {
+                    try {
+                        return (await fetch(candidateUrl, { method: 'HEAD' })).ok;
+                    } catch {
+                        return false;
+                    }
+                };
+
+                // The splat's format varies per scene (whatever it was exported as) and the
+                // engine picks its parser from the file name, so probe the candidates and use
+                // the first that exists, falling back to "<id>.ply" if every probe fails (CORS,
+                // say). Cached per id, so later visits skip straight to the known url.
+                const resolveContentUrl = async (folder, sceneId) => {
+                    const cacheKey = `contentUrl:${sceneId}`;
+                    const cached = cacheGet(cacheKey);
+                    if (cached) {
+                        return cached;
+                    }
+
+                    const encodedId = encodeURIComponent(sceneId);
+                    const candidates = [
+                        `${folder}/${encodedId}.compressed.ply`,
+                        `${folder}/${encodedId}.sog`,
+                        `${folder}/${encodedId}.meta.json`,
+                        `${folder}/lod-meta.json`,
+                        `${folder}/${encodedId}.ply`
+                    ];
+                    const found = await Promise.all(candidates.map(async (c) => ((await exists(c)) ? c : null)));
+                    const resolved = found.find((c) => c !== null) ?? candidates[candidates.length - 1];
+                    cacheSet(cacheKey, resolved);
+                    return resolved;
+                };
+
+                // An optional file with the same literal name in every scene folder
+                // ("collision.glb", "mirrors.json"). Cached per id like the content url; a miss is
+                // cached too, as an empty string, so scenes without one do not probe every visit.
+                const resolveOptional = async (folder, sceneId, filename) => {
+                    const cacheKey = `${filename}:${sceneId}`;
+                    const cached = cacheGet(cacheKey);
+                    if (cached !== null) {
+                        return cached || null;
+                    }
+                    const candidateUrl = `${folder}/${filename}`;
+                    const found = (await exists(candidateUrl)) ? candidateUrl : '';
+                    cacheSet(cacheKey, found);
+                    return found || null;
+                };
+
+                const [contentUrl, collisionUrl, mirrorsUrl] = await Promise.all([
+                    url.searchParams.get('content') ??
+                        (sceneFolder ? resolveContentUrl(sceneFolder, id) : './scene.compressed.ply'),
+                    url.searchParams.get('collision') ??
+                        url.searchParams.get('voxel') ??
+                        (sceneFolder ? resolveOptional(sceneFolder, id, 'collision.glb') : null),
+                    url.searchParams.get('mirrors') ??
+                        (sceneFolder ? resolveOptional(sceneFolder, id, 'mirrors.json') : null)
+                ]);
+
+                const posterUrl = url.searchParams.get('poster') ?? (sceneFolder ? `${sceneFolder}/poster.jpg` : null);
+                const skyboxUrl = url.searchParams.get('skybox') ?? null;
+                const settingsUrl =
+                    url.searchParams.get('settings') ??
+                    (sceneFolder ? `${sceneFolder}/settings.json` : './settings.json');
+
+                // Scenes with mirrors render on WebGL, like the Splat Portal Mirror Tool they were
+                // authored in. On WebGPU the engine runs the splat modify chunk (the mirror holes
+                // and the clip that hides what is behind a mirror) in a compute pass that never
+                // sees the mirror data, so reflections show the room behind the mirror wall.
+                // ?webgpu forces WebGPU anyway, for testing.
+                const renderer =
+                    url.searchParams.has('webgl') || (mirrorsUrl && !url.searchParams.has('webgpu'))
+                        ? 'webgl'
+                        : 'webgpu';
+
+                const budgetParam = url.searchParams.get('budget');
+                const budget = budgetParam !== null ? Number(budgetParam) : undefined;
+
+                // as src/index.html: the octree parser fetches lod-meta.json itself
+                const contentName = new URL(contentUrl, location.href).pathname.split('/').pop() ?? '';
+                const prefetchContent = contentName.toLowerCase() !== 'lod-meta.json';
+
+                // createViewer's options, minus the container and the settings. Kept in step
+                // with the same block in src/index.html.
+                const sseOptions = {
+                    contentUrl,
+                    contentFilename: null,
+                    posterUrl,
+                    skyboxUrl,
+                    collisionUrl,
+                    poster: posterUrl && createImage(posterUrl),
+                    contents: prefetchContent ? fetch(contentUrl) : undefined,
+                    ui: !url.searchParams.has('noui'),
+                    reticle: url.searchParams.has('reticle'),
+                    noanim: url.searchParams.has('noanim'),
+                    nofx: url.searchParams.has('nofx'),
+                    hpr: url.searchParams.has('hpr')
+                        ? ['', '1', 'true', 'enable'].includes(url.searchParams.get('hpr'))
+                        : undefined,
+                    ministats: url.searchParams.has('ministats'),
+                    colorize: url.searchParams.has('colorize'),
+                    renderer,
+                    aa: url.searchParams.has('aa'),
+                    stochastic: url.searchParams.has('stochastic'),
+                    splatSource: url.searchParams.get('splatSource') ?? undefined,
+                    variant: url.searchParams.get('variant') ?? undefined,
+                    budget,
+                    heatmap: url.searchParams.has('heatmap'),
+                    fullload: url.searchParams.has('fullload'),
+                    debug: url.searchParams.has('debug'),
+                    lang: url.searchParams.get('lang'),
+                    // the standalone document is the one place the window.* hooks belong
+                    exposeGlobals: true
+                };
+
+                return {
+                    options: sseOptions,
+                    settings: fetch(settingsUrl).then((response) => response.json()),
+                    mirrorsUrl
+                };
+            })();
+        </script>
+    </head>
+    <body>
+        <script type="module" src="./index.js"></script>
+    </body>
+</html>
