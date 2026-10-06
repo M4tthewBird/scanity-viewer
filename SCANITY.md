@@ -23,6 +23,7 @@ Current base: **SuperSplat Viewer 1.37.0** (PlayCanvas engine 2.23.0).
 | `main.ts` | Calls upstream's `createViewer()`, then attaches the modules below to the handle it returns |
 | `theme.scss` | The Scanity look over upstream's markup: tokens, glass pills and panels, hotspots, joystick |
 | `brand.ts` | Scanity logo (always visible, links to scanity.cz); info panel says "Scanity Viewer" and credits SuperSplat and PlayCanvas |
+| `annotation-gaze.ts` | Annotations stay quietly visible (a dot from afar, the number up close); walking up to one and looking at it opens its detail without moving the camera |
 | `annotation-list.ts` | Clicking the annotation title opens a list of all annotations; on touch the navigator sits in the bottom row |
 | `mirrors/` | Live mirror reflections from `mirrors.json` |
 | `defaults.ts` | Gaming controls (joystick) on by default on touch when the scene is walkable |
@@ -35,6 +36,7 @@ Current base: **SuperSplat Viewer 1.37.0** (PlayCanvas engine 2.23.0).
 Kept to a minimum and marked `SCANITY`:
 
 - `src/localization.ts`: two lines registering Czech
+- `src/ui/annotations.ts`: the hotspots are hidden only by the settings toggle, not while walking with gaming controls or while the toolbar is faded out
 - `src/locales/cs.json`: Czech strings (new file)
 - `package.json`: the `scanity:*` scripts
 - `.gitignore`: `site`

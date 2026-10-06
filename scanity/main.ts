@@ -5,6 +5,7 @@
 
 import { createViewer } from '../src/index';
 
+import { initAnnotationGaze } from './annotation-gaze';
 import { initAnnotationList } from './annotation-list';
 import { initBrand } from './brand';
 import { initDefaults } from './defaults';
@@ -41,4 +42,5 @@ if (options.ui !== false) {
     initLoadingBar(viewer, root);
     initJoystickFeedback(root);
     initAnnotationList(viewer, root);
+    initAnnotationGaze(viewer, root);
 }

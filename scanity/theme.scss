@@ -609,25 +609,55 @@ $nav-own-row-below: 560px;
     // ---- annotations: hotspots and their panel -------------------------------
 
     .sse-annotations {
-        // a disc in the controls' language: the light glass tone of a control pill with a
-        // white rim and a grey number at rest; filled ink with a white number when pointed at
-        // or selected, like the active camera toggle
+        // Always on, quietly: from afar a small light dot with no number; near the camera
+        // (scn-near, from scanity/annotation-gaze.ts) a disc in the controls' language, the
+        // light glass tone of a control pill with a white rim and a grey number; filled ink
+        // with a white number when pointed at, looked at (scn-gazed) or selected, like the
+        // active camera toggle. Upstream fades the ones the scene covers.
         > .sse-annotation-hotspots > .sse-annotation-hotspot {
-            width: 28px;
-            height: 28px;
+            width: 12px;
+            height: 12px;
             border: 1.5px solid $white;
-            font-size: 12px;
+            font-size: 0;
             font-weight: 700;
             font-variant-numeric: tabular-nums;
             color: $muted;
             background-color: rgba($white, 0.86);
-            box-shadow: 0 2px 10px rgba($ink, 0.28);
+            box-shadow: 0 2px 8px rgba($ink, 0.3);
+            transition:
+                opacity 300ms cubic-bezier(0.45, 0, 0.55, 1),
+                width 200ms ease,
+                height 200ms ease,
+                font-size 200ms ease,
+                color 150ms ease,
+                background-color 150ms ease;
+
+            &.scn-near,
+            &.scn-gazed,
+            &.sse-active,
+            &:hover {
+                width: 28px;
+                height: 28px;
+                font-size: 12px;
+            }
 
             &:hover,
+            &.scn-gazed,
             &.sse-active {
                 border-color: $white;
                 color: $white;
                 background-color: $ink;
+            }
+
+            // opened by looking at it, which tests it in view itself: full strength even while
+            // upstream's own test (run only once the camera stops) still has it covered
+            &.scn-gazed {
+                opacity: 1;
+            }
+
+            // covered from afar: barely there, though still findable
+            &.sse-occluded:not(.scn-near):not(:hover):not(.sse-active) {
+                opacity: 0.3;
             }
         }
 

@@ -198,9 +198,10 @@ class Annotations {
         };
 
         const update = () => {
-            const firstPersonGamingControls =
-                (state.cameraMode === 'walk' || state.cameraMode === 'fly') && state.gamingControls;
-            const hidden = !state.loaded || !state.showAnnotations || state.controlsHidden || firstPersonGamingControls;
+            // SCANITY: the hotspots stay up while walking with gaming controls and while the
+            // toolbar is faded out; only the settings toggle hides them. Upstream also hides them
+            // on `state.controlsHidden` and in walk / fly with `state.gamingControls`.
+            const hidden = !state.loaded || !state.showAnnotations;
             const wasHidden = parentDom.style.display === 'none';
             parentDom.style.display = hidden ? 'none' : 'block';
             // hotspots coming back may have been covered or uncovered while hidden
