@@ -24,10 +24,12 @@ Current base: **SuperSplat Viewer 1.37.0** (PlayCanvas engine 2.23.0).
 | `theme.scss` | The Scanity look over upstream's markup: tokens, glass pills and panels, hotspots, joystick |
 | `brand.ts` | Scanity logo (always visible, links to scanity.cz); info panel says "Scanity Viewer" and credits SuperSplat and PlayCanvas |
 | `annotation-gaze.ts` | Annotations stay quietly visible (a dot from afar, the number up close); walking up to one and looking at it opens its detail without moving the camera |
+| `help-panel.ts`, `help-strings.json` | The quick-start guide: opens by itself on the first visit (already while loading) with the controls of the current mode, desktop / touch tabs, "don't show again"; reopened from the info panel. Upstream's controls panel at the bottom right stays as it is |
 | `annotation-list.ts` | Clicking the annotation title opens a list of all annotations; on touch the navigator sits in the bottom row |
 | `mirrors/` | Live mirror reflections from `mirrors.json` |
 | `defaults.ts` | Gaming controls (joystick) on by default on touch when the scene is walkable |
 | `joystick.ts` | Marks the held joystick so the theme can brighten it |
+| `walk-only.ts` | `?walkonly`: keeps the viewer in walk mode |
 | `loading-bar.ts` | Repaints upstream's orange loading bar in Scanity blue |
 | `tester.html` | Embed test page: `/tester.html?id=ikka_gym` |
 
@@ -63,6 +65,7 @@ These are on top of upstream's, which are listed in `README.md`:
 | `id` | Scene folder in the R2 bucket, e.g. `?id=living_room` |
 | `mirrors` | URL of a `mirrors.json`, overriding the one in the scene folder (`?mirrors=` turns mirrors off) |
 | `webgpu` | Force WebGPU even for a scene with mirrors (the reflections then show what is behind the mirror wall) |
+| `walkonly` | Walk mode only, in a scene with walkable collision: no orbit, fly or animation tour, and their buttons and shortcuts are hidden; selecting an annotation still flies there, then walks on from that spot. Ignored in a scene without collision |
 | `lang=cs` | Czech, also detected from the browser |
 
 ## Updating to a new upstream release

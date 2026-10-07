@@ -134,6 +134,15 @@ $nav-own-row-below: 560px;
         }
     }
 
+    // ?walkonly (scanity/walk-only.ts): no camera mode toggle, no animation playback
+    &.scn-walkOnly {
+        .sse-buttonGroup:has(> .sse-orbitCamera),
+        .sse-buttonGroup:has(> .sse-play),
+        .sse-timelineContainer {
+            display: none !important;
+        }
+    }
+
     // ---- shared pieces ---------------------------------------------------
 
     .sse-key {
@@ -461,6 +470,417 @@ $nav-own-row-below: 560px;
                     color: $ink;
                 }
             }
+        }
+    }
+
+    // ---- quick-start guide (scanity/help-panel.ts) ---------------------------
+    // A centred white card over a darkened scene: eyebrow and title, a desktop / touch tab
+    // pill, the current mode's controls (hairline rows with mouse chips and keycaps on desktop,
+    // gesture cards or rows on touch), and a foot with "don't show again" and the call to action
+
+    .scn-help {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 26px;
+        box-sizing: border-box;
+        background: radial-gradient(120% 90% at 50% 40%, rgba($ink, 0.22), rgba($ink, 0.56));
+        backdrop-filter: blur(2px);
+        -webkit-backdrop-filter: blur(2px);
+        animation: scn-fade-in 250ms ease both;
+    }
+
+    .scn-helpContent {
+        position: relative;
+        width: min(420px, 100%);
+        max-height: 100%;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        padding: 22px 22px 16px;
+        border-radius: 24px;
+        @include glass($glass-modal, 24px);
+        box-shadow: $modal-shadow;
+        color: $muted;
+        animation: scn-help-pop-in 350ms cubic-bezier(0.22, 0.68, 0, 1) both;
+    }
+
+    .scn-helpHead {
+        flex: none;
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+    }
+
+    .scn-helpHeadCopy {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .scn-helpEyebrow {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: $muted;
+    }
+
+    .scn-helpTitle {
+        font-size: 1.2rem;
+        font-weight: 500;
+        line-height: 1.2;
+        letter-spacing: -0.02em;
+        color: $ink;
+    }
+
+    .scn-helpClose {
+        flex: none;
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid rgba($ink, 0.12);
+        border-radius: 50%;
+        cursor: pointer;
+        color: $muted;
+        background-color: rgba($white, 0.5);
+        transition:
+            color 150ms ease,
+            background-color 150ms ease;
+
+        &:hover {
+            color: $ink;
+            background-color: $white;
+        }
+
+        > svg {
+            display: block;
+        }
+    }
+
+    .scn-helpTabs {
+        flex: none;
+        display: flex;
+        width: fit-content;
+        margin-top: 16px;
+        padding: 3px;
+        gap: 2px;
+        border: 1px solid rgba($ink, 0.12);
+        border-radius: 100px;
+        background-color: rgba($white, 0.55);
+    }
+
+    .scn-helpTab {
+        padding: 8px 15px;
+        border: 0;
+        border-radius: 100px;
+        cursor: pointer;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+        color: $muted;
+        background-color: transparent;
+        transition:
+            color 200ms ease,
+            background-color 200ms ease;
+
+        &:hover {
+            color: $ink;
+        }
+
+        &.scn-active {
+            color: $white;
+            background-color: $ink;
+        }
+    }
+
+    .scn-helpBody {
+        flex: 1 1 auto;
+        min-height: 0;
+        margin-top: 16px;
+        overflow-y: auto;
+        touch-action: pan-y;
+        display: grid;
+        gap: 8px;
+
+        &::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        &::-webkit-scrollbar-thumb {
+            background-color: rgba($ink, 0.15);
+            border-radius: 3px;
+        }
+    }
+
+    .scn-helpModeTitle {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: $scan-blue;
+    }
+
+    // desktop: one card, hairline rows, the action on the left and its input on the right
+    .scn-helpList {
+        border: 1px solid rgba($ink, 0.12);
+        border-radius: 14px;
+        background-color: rgba($white, 0.7);
+        overflow: hidden;
+    }
+
+    .scn-helpLine {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        min-height: 40px;
+        padding: 6px 14px;
+        box-sizing: border-box;
+
+        & + .scn-helpLine {
+            border-top: 1px solid rgba($ink, 0.07);
+        }
+    }
+
+    .scn-helpLineTitle {
+        font-size: 0.86rem;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        color: $ink;
+    }
+
+    .scn-helpChip {
+        flex: none;
+        padding: 5px 10px;
+        border-radius: 8px;
+        background-color: rgba($ink, 0.06);
+        color: $ink;
+        font-size: 0.76rem;
+        font-weight: 700;
+        letter-spacing: 0.01em;
+
+        &.scn-helpChip--mouse {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 9px 4px 6px;
+            white-space: nowrap;
+
+            > svg {
+                flex: none;
+                color: $scan-blue;
+            }
+        }
+    }
+
+    .scn-helpKeys {
+        flex: none;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+
+        > kbd {
+            min-width: 24px;
+            height: 24px;
+            padding: 0 7px;
+            box-sizing: border-box;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba($ink, 0.14);
+            border-radius: 6px;
+            box-shadow: 0 1.5px 0 rgba($ink, 0.14);
+            background-color: $white;
+            color: $ink;
+            font-family: inherit;
+            font-size: 0.72rem;
+            font-weight: 700;
+            line-height: 1;
+        }
+    }
+
+    .scn-helpKeySep {
+        font-size: 0.76rem;
+        color: $faint;
+    }
+
+    // touch: gesture cards for the click modes, rows for the gaming ones
+    .scn-helpCards {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+    }
+
+    .scn-helpRows {
+        display: grid;
+        gap: 8px;
+    }
+
+    .scn-helpCard {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        padding: 16px 12px;
+        border: 1px solid rgba($ink, 0.12);
+        border-radius: 16px;
+        background-color: rgba($white, 0.7);
+        text-align: center;
+
+        > .scn-helpRowTitle {
+            font-size: 0.85rem;
+        }
+
+        > .scn-helpRowBody {
+            font-size: 0.72rem;
+        }
+    }
+
+    .scn-helpGlyph {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 40px;
+        margin-bottom: 2px;
+        color: $scan-blue;
+    }
+
+    .scn-helpRow,
+    .scn-helpChipRow {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 10px 12px;
+        border: 1px solid rgba($ink, 0.12);
+        border-radius: 14px;
+        background-color: rgba($white, 0.7);
+    }
+
+    .scn-helpChipRow {
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 14px;
+
+        > .scn-helpRowTitle {
+            font-size: 0.88rem;
+        }
+    }
+
+    .scn-helpBadge {
+        flex: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 34px;
+        height: 34px;
+        border-radius: 100px;
+        background-color: $ink;
+        color: $white;
+    }
+
+    .scn-helpRowText {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+    }
+
+    .scn-helpRowTitle {
+        font-size: 0.92rem;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        color: $ink;
+    }
+
+    .scn-helpRowBody {
+        font-size: 0.78rem;
+        color: $muted;
+    }
+
+    .scn-helpFoot {
+        flex: none;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        margin-top: 16px;
+        padding-top: 14px;
+        border-top: 1px solid $hairline;
+    }
+
+    .scn-helpRemember {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.76rem;
+        color: $muted;
+        cursor: pointer;
+
+        > input {
+            width: 15px;
+            height: 15px;
+            margin: 0;
+            accent-color: $scan-blue;
+            cursor: pointer;
+        }
+    }
+
+    .scn-helpCta {
+        padding: 11px 18px;
+        border: 0;
+        border-radius: 100px;
+        background-color: $ink;
+        color: $white;
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+        cursor: pointer;
+        transition: background-color 200ms ease;
+
+        &:hover {
+            background-color: $scan-blue;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .scn-help {
+            padding: 14px;
+        }
+
+        .scn-helpContent {
+            padding: 18px 16px 14px;
+            border-radius: 20px;
+        }
+    }
+
+    // the info panel's way back to the guide
+    .sse-infoPanel > .sse-infoPanelContent > .scn-helpReopen {
+        align-self: center;
+        padding: 9px 16px;
+        border: 1px solid rgba($ink, 0.12);
+        border-radius: 100px;
+        cursor: pointer;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: $ink;
+        background-color: rgba($white, 0.6);
+        transition:
+            color 150ms ease,
+            background-color 150ms ease;
+
+        &:hover {
+            color: $white;
+            background-color: $ink;
         }
     }
 
@@ -970,5 +1390,12 @@ $nav-own-row-below: 560px;
     from {
         opacity: 0;
         transform: translate(-50%, calc(-50% + 12px)) scale(0.98);
+    }
+}
+
+@keyframes scn-help-pop-in {
+    from {
+        opacity: 0;
+        transform: translateY(12px) scale(0.98);
     }
 }

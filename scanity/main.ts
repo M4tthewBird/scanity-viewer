@@ -9,9 +9,11 @@ import { initAnnotationGaze } from './annotation-gaze';
 import { initAnnotationList } from './annotation-list';
 import { initBrand } from './brand';
 import { initDefaults } from './defaults';
+import { initHelpPanel } from './help-panel';
 import { initJoystickFeedback } from './joystick';
 import { initLoadingBar } from './loading-bar';
 import { initMirrors } from './mirrors';
+import { initWalkOnly } from './walk-only';
 
 declare global {
     // eslint-disable-next-line @typescript-eslint/consistent-type-definitions -- merges into Window
@@ -33,6 +35,10 @@ const root = document.body.querySelector<HTMLElement>(':scope > .sse-viewer');
 
 initDefaults(viewer);
 
+if (new URL(location.href).searchParams.has('walkonly')) {
+    initWalkOnly(viewer, root);
+}
+
 if (mirrorsUrl) {
     initMirrors(viewer, mirrorsUrl);
 }
@@ -43,4 +49,5 @@ if (options.ui !== false) {
     initJoystickFeedback(root);
     initAnnotationList(viewer, root);
     initAnnotationGaze(viewer, root);
+    initHelpPanel(viewer, root);
 }
