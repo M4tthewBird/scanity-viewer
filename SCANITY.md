@@ -11,7 +11,8 @@ Current base: **SuperSplat Viewer 1.37.0** (PlayCanvas engine 2.23.0).
 | `src/`, `rollup.config.mjs`, `README.md`, … | Upstream, unchanged apart from the marked lines below |
 | `scanity/` | Everything Scanity: the page, the entry script, the theme, mirrors |
 | `rollup.scanity.mjs` | Builds the Scanity viewer into `site/` |
-| `netlify.toml`, `.github/workflows/pages.yml` | Deploy `site/` (Netlify, GitHub Pages) |
+| `netlify-upload.cmd` | Builds `site/` and opens it, ready to drag onto Netlify (see Deploying) |
+| `.github/workflows/pages.yml`, `netlify.toml` | GitHub Pages deploys `site/` on every push to `main`; `netlify.toml` only matters if Netlify builds from the repo again |
 | `splat-portal-mirror-tool/` | Tool for placing mirrors and exporting `mirrors.json` |
 | `PRODUCT.md` | What the viewer is for and who uses it |
 
@@ -67,6 +68,12 @@ These are on top of upstream's, which are listed in `README.md`:
 | `webgpu` | Force WebGPU even for a scene with mirrors (the reflections then show what is behind the mirror wall) |
 | `walkonly` | Walk mode only, in a scene with walkable collision: no orbit, fly or animation tour, and their buttons and shortcuts are hidden; selecting an annotation still flies there, then walks on from that spot. Ignored in a scene without collision |
 | `lang=cs` | Czech, also detected from the browser |
+
+## Deploying
+
+- **GitHub Pages** (testing): every push to `main` builds and deploys automatically.
+- **Netlify** (`viewer.scanity.cz`, production): manual, so that pushes do not use Netlify credits. Double-click `netlify-upload.cmd`; it builds `site/` and opens the folder. Drag that folder onto the site's **Deploys** page in Netlify. Automatic builds from GitHub are stopped in the Netlify site settings.
+- The website (`scanity-website`) works the same way: its `netlify-upload.cmd` prepares `netlify-upload/` (the `deploy/` folder without editor files) to drag onto the website's Deploys page.
 
 ## Updating to a new upstream release
 
