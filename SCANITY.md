@@ -26,6 +26,7 @@ Current base: **SuperSplat Viewer 1.37.0** (PlayCanvas engine 2.23.0).
 | `brand.ts` | Scanity logo (always visible, links to scanity.cz); info panel says "Scanity Viewer" and credits SuperSplat and PlayCanvas |
 | `annotation-gaze.ts` | Annotations stay quietly visible (a dot from afar, the number up close); walking up to one and looking at it opens its detail without moving the camera |
 | `help-panel.ts`, `help-strings.json` | The quick-start guide: opens by itself on the first visit (already while loading) with the controls of the current mode, desktop / touch tabs, "don't show again"; reopened from the info panel. Upstream's controls panel at the bottom right stays as it is |
+| `annotation-links.ts` | A button in an annotation's panel that opens a page in a new tab (e.g. booking), from `"extras": { "link": { "url": …, "label": … } }` on that annotation in the scene's `settings.json` |
 | `annotation-list.ts` | Clicking the annotation title opens a list of all annotations; on touch the navigator sits in the bottom row |
 | `mirrors/` | Live mirror reflections from `mirrors.json` |
 | `defaults.ts` | Gaming controls (joystick) on by default on touch when the scene is walkable |

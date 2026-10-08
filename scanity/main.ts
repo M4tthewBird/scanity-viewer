@@ -6,6 +6,7 @@
 import { createViewer } from '../src/index';
 
 import { initAnnotationGaze } from './annotation-gaze';
+import { initAnnotationLinks } from './annotation-links';
 import { initAnnotationList } from './annotation-list';
 import { initBrand } from './brand';
 import { initDefaults } from './defaults';
@@ -49,5 +50,6 @@ if (options.ui !== false) {
     initJoystickFeedback(root);
     initAnnotationList(viewer, root);
     initAnnotationGaze(viewer, root);
+    initAnnotationLinks(viewer, root);
     initHelpPanel(viewer, root);
 }

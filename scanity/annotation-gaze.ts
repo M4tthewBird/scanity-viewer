@@ -4,6 +4,8 @@ import type { Entity } from 'playcanvas';
 import type { ViewerHandle } from '../src/index';
 import type { ScenePicker } from '../src/picker';
 
+import { setPanelLink } from './annotation-links';
+
 // Within this distance of the camera (scene units, metres in Scanity's captures) a hotspot
 // shows its number instead of a dot, and can open by being looked at
 const NEAR_DISTANCE = 3;
@@ -196,6 +198,7 @@ const initAnnotationGaze = (viewer: ViewerHandle, root: HTMLElement) => {
         }
         titleDom.textContent = annotations[open].title ?? '';
         textDom.textContent = annotations[open].text ?? '';
+        setPanelLink(panel, annotations[open].extras, root.lang);
         hotspots[open]?.classList.add('scn-gazed');
         place();
         panel.classList.add('sse-visible');

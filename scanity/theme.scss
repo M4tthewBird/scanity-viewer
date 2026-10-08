@@ -1104,6 +1104,31 @@ $nav-own-row-below: 560px;
             &:has(> .sse-annotation-text:empty) {
                 padding-bottom: 12px;
             }
+
+            // a link from the annotation's extras (scanity/annotation-links.ts), as the site's
+            // dark button. Clickable only while its panel shows
+            > .scn-annotationLink {
+                display: inline-flex;
+                align-items: center;
+                height: 32px;
+                margin-top: 10px;
+                padding: 0 16px;
+                border-radius: 100px;
+                font-size: 12px;
+                font-weight: 700;
+                color: $white;
+                text-decoration: none;
+                background-color: $ink;
+                transition: background-color 150ms ease;
+
+                &:hover {
+                    background-color: $scan-blue;
+                }
+            }
+
+            &:not(.sse-visible) > .scn-annotationLink {
+                pointer-events: none;
+            }
         }
     }
 
