@@ -13,6 +13,7 @@ import { initDefaults } from './defaults';
 import { initHelpPanel } from './help-panel';
 import { initJoystickFeedback } from './joystick';
 import { initLoadingBar, initLoadingCover } from './loading-bar';
+import { initLoadingGlow } from './loading-glow';
 import { initMirrors } from './mirrors';
 import { initWalkOnly } from './walk-only';
 
@@ -36,6 +37,7 @@ const root = document.body.querySelector<HTMLElement>(':scope > .sse-viewer');
 
 initDefaults(viewer);
 initLoadingCover(viewer, root);
+initLoadingGlow(viewer, root);
 
 if (new URL(location.href).searchParams.has('walkonly')) {
     initWalkOnly(viewer, root);

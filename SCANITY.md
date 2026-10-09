@@ -23,7 +23,7 @@ Current base: **SuperSplat Viewer 1.37.0** (PlayCanvas engine 2.23.0).
 | `index.html` | The page. Resolves `?id=` to the scene folder in R2 (splat, `settings.json`, `poster.jpg`, `collision.glb`, `mirrors.json`); picks WebGL for scenes with mirrors; loads Manrope |
 | `main.ts` | Calls upstream's `createViewer()`, then attaches the modules below to the handle it returns |
 | `theme.scss` | The Scanity look over upstream's markup: tokens, glass pills and panels, hotspots, joystick |
-| `brand.ts` | Scanity logo (always visible, links to scanity.cz); info panel says "Scanity Viewer" and credits SuperSplat and PlayCanvas |
+| `brand.ts` | Scanity logo (always visible, links to scanity.cz; its paths are shared with `loading-glow.ts`); info panel says "Scanity Viewer" and credits SuperSplat and PlayCanvas |
 | `annotation-gaze.ts` | Annotations stay quietly visible (a dot from afar, the number up close); walking up to one and looking at it opens its detail without moving the camera |
 | `help-panel.ts`, `help-strings.json` | The quick-start guide: opens by itself on the first visit (already while loading) with the controls of the current mode, desktop / touch tabs, "don't show again"; reopened from the info panel. Upstream's controls panel at the bottom right stays as it is |
 | `annotation-links.ts` | A button in an annotation's panel that opens a page in a new tab (e.g. booking), from `"extras": { "link": { "url": …, "label": … } }` on that annotation in the scene's `settings.json` |
@@ -32,7 +32,8 @@ Current base: **SuperSplat Viewer 1.37.0** (PlayCanvas engine 2.23.0).
 | `defaults.ts` | Gaming controls (joystick) on by default on touch when the scene is walkable |
 | `joystick.ts` | Marks the held joystick so the theme can brighten it |
 | `walk-only.ts` | `?walkonly`: keeps the viewer in walk mode |
-| `loading-bar.ts` | Repaints upstream's orange loading bar in Scanity blue |
+| `loading-bar.ts` | Repaints upstream's orange loading bar in Scanity blue; keeps the canvas hidden over the grey gradient until the scene has loaded (no black screen) |
+| `loading-glow.ts` | "Sunlight Surprise" while loading: the Scanity mark on the grey, lit from behind by a slowly circling sun that brightens with the progress, the mark coming from a blur into focus; fades into the scene once loaded. Own WebGL2 shader, released afterwards |
 | `tester.html` | Embed test page: `/tester.html?id=ikka_gym` |
 
 ### Edits inside upstream files

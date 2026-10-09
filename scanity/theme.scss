@@ -188,6 +188,18 @@ $nav-own-row-below: 560px;
         opacity: 0;
     }
 
+    // Sunlight Surprise, the mark lit up by the loading progress (scanity/loading-glow.ts): over
+    // the gradient, under the ui, faded in at once and out into the scene once loaded
+    > canvas.scn-loadingGlow {
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 700ms ease;
+
+        &.scn-shown {
+            opacity: 1;
+        }
+    }
+
 
     .sse-loadingWrap {
         width: min(320px, calc(100% - 32px));

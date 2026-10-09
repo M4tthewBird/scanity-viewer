@@ -1,11 +1,18 @@
 import { version as upstreamVersion } from '../package.json';
 
 // The Scanity mark from scanity.cz's header (assets/scanity_logo.svg), inlined so the viewer
-// needs no extra request. Constant markup: nothing external reaches innerHTML.
+// needs no extra request: its two paths, in the svg's own units (31.28 × 54.07).
+const MARK_WIDTH = 31.28;
+const MARK_HEIGHT = 54.07;
+const MARK_PATHS = [
+    'M30.43,6.03L12.82,15.83l-1.92,1.07v16.69l-2.21,1.1L.48,29.97l-.09-.05-.1-.05c-.2-.1-.26-.2-.29-.35V12.56c.12-.87.44-1.33.66-1.56L20.03.08l.03-.02.03-.02s.08-.03.09-.04c.01,0,.02,0,.05.03l.16.1,10.04,5.9Z',
+    'M.85,48.04l17.61-9.8,1.92-1.07v-16.69s2.21-1.1,2.21-1.1l8.21,4.72.09.05.1.05c.2.1.26.2.29.35v16.96c-.12.87-.44,1.33-.66,1.56l-19.37,10.92-.03.02-.03.02s-.08.03-.09.04c-.01,0-.02,0-.05-.03l-.16-.1L.85,48.04Z'
+];
+
+// Constant markup: nothing external reaches innerHTML.
 const logoSvg =
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 31.28 54.07" role="img" aria-label="Scanity">' +
-    '<path fill="currentColor" d="M30.43,6.03L12.82,15.83l-1.92,1.07v16.69l-2.21,1.1L.48,29.97l-.09-.05-.1-.05c-.2-.1-.26-.2-.29-.35V12.56c.12-.87.44-1.33.66-1.56L20.03.08l.03-.02.03-.02s.08-.03.09-.04c.01,0,.02,0,.05.03l.16.1,10.04,5.9Z"/>' +
-    '<path fill="currentColor" d="M.85,48.04l17.61-9.8,1.92-1.07v-16.69s2.21-1.1,2.21-1.1l8.21,4.72.09.05.1.05c.2.1.26.2.29.35v16.96c-.12.87-.44,1.33-.66,1.56l-19.37,10.92-.03.02-.03.02s-.08.03-.09.04c-.01,0-.02,0-.05-.03l-.16-.1L.85,48.04Z"/>' +
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${MARK_WIDTH} ${MARK_HEIGHT}" role="img" aria-label="Scanity">` +
+    MARK_PATHS.map((d) => `<path fill="currentColor" d="${d}"/>`).join('') +
     '</svg>';
 
 const createLink = (className: string, href: string) => {
@@ -53,4 +60,4 @@ const initBrand = (root: HTMLElement) => {
     }
 };
 
-export { initBrand };
+export { initBrand, MARK_HEIGHT, MARK_PATHS, MARK_WIDTH };
