@@ -175,6 +175,20 @@ $nav-own-row-below: 560px;
 
     // ---- loading ---------------------------------------------------------
 
+    // scanity.cz's light grey viewer surface (--surface-viewer) behind the scene: the canvas,
+    // which only clears to the scene's (usually black) background until the splat arrives,
+    // stays hidden over it until loaded (scanity/loading-bar.ts), then fades in
+    background: linear-gradient(145deg, #dfe4e7, #f9fafb);
+
+    > canvas {
+        transition: opacity 600ms ease;
+    }
+
+    &:not(.scn-loaded) > canvas {
+        opacity: 0;
+    }
+
+
     .sse-loadingWrap {
         width: min(320px, calc(100% - 32px));
         box-sizing: border-box;

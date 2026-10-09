@@ -19,4 +19,15 @@ const initLoadingBar = (viewer: ViewerHandle, root: HTMLElement) => {
     return () => subscription.off();
 };
 
-export { initLoadingBar };
+// Until the scene has loaded, the canvas only clears to the scene's background colour (black
+// for most scans). Scanity keeps it hidden over the viewer's grey gradient (theme.scss) and fades
+// it in once loaded, as upstream does over a poster.
+const initLoadingCover = (viewer: ViewerHandle, root: HTMLElement) => {
+    const reveal = () => root.classList.toggle('scn-loaded', viewer.state.loaded);
+    const subscription = viewer.events.on('loaded:changed', reveal);
+    reveal();
+
+    return () => subscription.off();
+};
+
+export { initLoadingBar, initLoadingCover };
