@@ -20,7 +20,7 @@ Current base: **SuperSplat Viewer 1.37.0** (PlayCanvas engine 2.23.0).
 
 | File | Does |
 | ---- | ---- |
-| `index.html` | The page. Resolves `?id=` to the scene folder in R2 (splat, `settings.json`, `poster.jpg`, `collision.glb`, `mirrors.json`); picks WebGL for scenes with mirrors; loads Manrope |
+| `index.html` | The page. Resolves `?id=` to the scene folder in R2 (splat, `settings.json`, `poster.jpg`, `collision.glb`, `mirrors.json`, background `skybox.webp` or `background.webp`, else the colour from `settings.json`); picks WebGL for scenes with mirrors; loads Manrope |
 | `main.ts` | Calls upstream's `createViewer()`, then attaches the modules below to the handle it returns |
 | `theme.scss` | The Scanity look over upstream's markup: tokens, glass pills and panels, hotspots, joystick |
 | `brand.ts` | Scanity logo (always visible, links to scanity.cz; its paths are shared with `loading-glow.ts`); info panel says "Scanity Viewer" and credits SuperSplat and PlayCanvas |

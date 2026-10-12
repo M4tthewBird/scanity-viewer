@@ -59,8 +59,10 @@
                 //   <iframe src="https://viewer.scanity.cz/?id=living_room">
                 // Each scene lives in its own folder in the R2 bucket "scanity-scenes", named
                 // after the id: one splat file, settings.json, and optionally poster.jpg,
-                // collision.glb and mirrors.json. Explicit ?content= / ?settings= / ?poster= /
-                // ?collision= / ?mirrors= always win over the id.
+                // collision.glb, mirrors.json and a background, skybox.webp (or background.webp):
+                // an equirectangular panorama around the scene; without one, the background is the
+                // colour in settings.json. Explicit ?content= / ?settings= / ?poster= /
+                // ?collision= / ?mirrors= / ?skybox= always win over the id.
                 //
                 // Public R2 dev url: swap for a custom domain (e.g. cdn.scanity.cz) later;
                 // nothing else needs to change when you do.
@@ -103,7 +105,13 @@
                     return (await exists(candidateUrl)) ? candidateUrl : null;
                 };
 
-                const [contentUrl, collisionUrl, mirrorsUrl, posterUrl] = await Promise.all([
+                // the background panorama: the first of its names that exists
+                const resolveSkybox = async (folder) => {
+                    const found = await Promise.all(['skybox.webp', 'background.webp'].map((name) => resolveOptional(folder, name)));
+                    return found.find((c) => c !== null) ?? null;
+                };
+
+                const [contentUrl, collisionUrl, mirrorsUrl, posterUrl, skyboxUrl] = await Promise.all([
                     url.searchParams.get('content') ??
                         (sceneFolder ? resolveContentUrl(sceneFolder, id) : './scene.compressed.ply'),
                     url.searchParams.get('collision') ??
@@ -111,9 +119,9 @@
                         (sceneFolder ? resolveOptional(sceneFolder, 'collision.glb') : null),
                     url.searchParams.get('mirrors') ??
                         (sceneFolder ? resolveOptional(sceneFolder, 'mirrors.json') : null),
-                    url.searchParams.get('poster') ?? (sceneFolder ? resolveOptional(sceneFolder, 'poster.jpg') : null)
+                    url.searchParams.get('poster') ?? (sceneFolder ? resolveOptional(sceneFolder, 'poster.jpg') : null),
+                    url.searchParams.get('skybox') ?? (sceneFolder ? resolveSkybox(sceneFolder) : null)
                 ]);
-                const skyboxUrl = url.searchParams.get('skybox') ?? null;
                 const settingsUrl =
                     url.searchParams.get('settings') ??
                     (sceneFolder ? `${sceneFolder}/settings.json` : './settings.json');
