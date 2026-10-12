@@ -56,13 +56,18 @@ function htmlTemplate() {
     };
 }
 
-// the pages: the viewer itself, and an embed test page
+// the pages: the viewer itself, and an embed test page; and the tab icons, scanity.cz's own
 function pages() {
     const files = { 'index.html': 'scanity/index.html', 'tester.html': 'scanity/tester.html' };
+    const icons = {
+        'favicon.ico': 'scanity/icons/favicon.ico',
+        'favicon.svg': 'scanity/icons/favicon.svg',
+        'apple-touch-icon.png': 'scanity/icons/apple-touch-icon.png'
+    };
     return {
         name: 'scanity-pages',
         buildStart() {
-            Object.values(files).forEach((file) => this.addWatchFile(file));
+            [...Object.values(files), ...Object.values(icons)].forEach((file) => this.addWatchFile(file));
         },
         generateBundle() {
             for (const [fileName, file] of Object.entries(files)) {
@@ -71,6 +76,9 @@ function pages() {
                     () => `<base href="${process.env.BASE_HREF ?? ''}" />`
                 );
                 this.emitFile({ type: 'asset', fileName, source });
+            }
+            for (const [fileName, file] of Object.entries(icons)) {
+                this.emitFile({ type: 'asset', fileName, source: readFileSync(file) });
             }
         }
     };
