@@ -122,9 +122,29 @@
                     url.searchParams.get('poster') ?? (sceneFolder ? resolveOptional(sceneFolder, 'poster.jpg') : null),
                     url.searchParams.get('skybox') ?? (sceneFolder ? resolveSkybox(sceneFolder) : null)
                 ]);
-                const settingsUrl =
-                    url.searchParams.get('settings') ??
-                    (sceneFolder ? `${sceneFolder}/settings.json` : './settings.json');
+                // The scene's settings: settings.json, or "<id>.json" as some exports name it. The
+                // first that answers with JSON is used; with none, main.ts falls back to the
+                // viewer's default settings, so a missing file costs the scene's look, not the scene
+                const settingsUrls = url.searchParams.has('settings')
+                    ? [url.searchParams.get('settings')]
+                    : sceneFolder
+                      ? [`${sceneFolder}/settings.json`, `${sceneFolder}/${encodeURIComponent(id)}.json`]
+                      : ['./settings.json'];
+                const fetchJson = async (jsonUrl) => {
+                    try {
+                        const response = await fetch(jsonUrl);
+                        return response.ok ? await response.json() : null;
+                    } catch {
+                        return null;
+                    }
+                };
+                const loadSettings = async () => {
+                    for (const settingsUrl of settingsUrls) {
+                        const json = await fetchJson(settingsUrl);
+                        if (json) return json;
+                    }
+                    return null;
+                };
 
                 // Scenes with mirrors render on WebGL, like the Splat Portal Mirror Tool they were
                 // authored in. On WebGPU the engine runs the splat modify chunk (the mirror holes
@@ -178,7 +198,7 @@
 
                 return {
                     options: sseOptions,
-                    settings: fetch(settingsUrl).then((response) => response.json()),
+                    settings: loadSettings(),
                     mirrorsUrl
                 };
             })();

@@ -4,6 +4,7 @@
 // needs this layer re-checked, not re-merged. See SCANITY.md.
 
 import { createViewer } from '../src/index';
+import { defaultSettings, validateSettings } from '../src/settings';
 
 import { initAnnotationGaze } from './annotation-gaze';
 import { initAnnotationLinks } from './annotation-links';
@@ -22,7 +23,8 @@ declare global {
     interface Window {
         sseReady: Promise<{
             options: Omit<Parameters<typeof createViewer>[0], 'container' | 'settings'>;
-            settings: Promise<object>;
+            /** The scene's settings file as found by index.html, or null when there was none */
+            settings: Promise<object | null>;
             mirrorsUrl: string | null;
         }>;
     }
@@ -30,7 +32,24 @@ declare global {
 
 const { options, settings, mirrorsUrl } = await window.sseReady;
 
-const viewer = await createViewer({ container: document.body, settings, ...options });
+// Settings that are missing or not settings at all would stop the viewer before it shows
+// anything; the scene still loads with the viewer's defaults instead (its background colour and
+// a camera framing the whole scene)
+const sceneSettings = settings.then((json) => {
+    if (json) {
+        try {
+            validateSettings(json);
+            return json;
+        } catch (err) {
+            console.warn('[scanity] the scene settings are not valid, using defaults:', err);
+        }
+    } else {
+        console.warn('[scanity] no scene settings found (settings.json), using defaults');
+    }
+    return defaultSettings();
+});
+
+const viewer = await createViewer({ container: document.body, settings: sceneSettings, ...options });
 
 // the instance root createViewer built inside the container
 const root = document.body.querySelector<HTMLElement>(':scope > .sse-viewer');

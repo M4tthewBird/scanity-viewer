@@ -9,7 +9,9 @@ import { MARK_HEIGHT, MARK_PATHS, MARK_WIDTH } from './brand';
 // into one texture.
 // Once the scene has loaded it fades out into the scene and its GL context is released.
 
-const TEXTURE = 1024;
+// 512 texels: built on the main thread as loading starts, so kept small (a quarter of 1024²);
+// the distance field scales up without losing the edge, and the shader measures in 1024 units
+const TEXTURE = 512;
 const FADE_MS = 700;
 /** The light rises no faster than from dark to full in this long, so even a scene that loads at
  * once (from the cache) gets the whole sunrise. */
@@ -18,7 +20,7 @@ const RISE_S = 0.9;
 const FINISH_MS = 1500;
 
 /** How far from the mark's edge its distance field reaches, texels. */
-const RANGE = 48;
+const RANGE = 24;
 
 /** Squared distance transform along one line (Felzenszwalb and Huttenlocher), in place. */
 const transformLine = (f: Float64Array, n: number, d: Float64Array, v: Int32Array, z: Float64Array) => {
@@ -221,7 +223,8 @@ const initLoadingGlow = (viewer: ViewerHandle, root: HTMLElement) => {
     // the mark about a quarter of the height, raised clear of the loading bar
     gl.uniform1f(uniform('size'), 0.7);
     gl.uniform1f(uniform('lift'), 0.07);
-    gl.uniform1f(uniform('range'), RANGE);
+    // in 1024-texel units, which the shader's softness and spill widths are tuned in
+    gl.uniform1f(uniform('range'), (RANGE * 1024) / TEXTURE);
 
     const viewerCanvas = root.querySelector(':scope > canvas');
     root.insertBefore(canvas, viewerCanvas ? viewerCanvas.nextSibling : root.firstChild);
