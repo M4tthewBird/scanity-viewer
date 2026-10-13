@@ -32,8 +32,10 @@ uniform float uCullSoft;
 uniform float uReflClipEnabled;
 uniform vec3  uMainCamPos;   // main camera world position
 uniform vec3  view_position; // engine-set per-camera world position
+uniform float uReflMinOpacity; // splats fainter than this are left out of reflections
 
 float gKeep = 1.0;
+float gRefl = 0.0;             // 1 in a reflection pass
 
 vec4 fetchM(float col, float row) {
     return texture2D(uMirrorData, vec2((col + 0.5) / float(MAXM), (row + 0.5) / MROWS));
@@ -101,6 +103,7 @@ void modifySplatCenter(inout vec3 center) {
             vec4 pl = mPlane(best);
             float sd = dot(pl.xyz, center) + pl.w;   // < 0 -> splat behind this mirror
             k *= step(0.0, sd);
+            gRefl = 1.0;
         }
     }
     gKeep = k;
@@ -110,6 +113,8 @@ void modifySplatRotationScale(vec3 originalCenter, vec3 modifiedCenter, inout ve
 }
 void modifySplatColor(vec3 center, inout vec4 color) {
     color.a *= gKeep;
+    // the engine skips a splat whose alpha ends up at the clip value
+    if (gRefl > 0.5 && color.a < uReflMinOpacity) { color.a = 0.0; }
 }
 `;
 
@@ -130,8 +135,10 @@ uniform uCullSoft: f32;
 uniform uReflClipEnabled: f32;
 uniform uMainCamPos: vec3f;   // main camera world position
 uniform view_position: vec3f; // engine-set per-camera world position
+uniform uReflMinOpacity: f32; // splats fainter than this are left out of reflections
 
 var<private> gKeep: f32 = 1.0;
+var<private> gRefl: f32 = 0.0;  // 1 in a reflection pass
 
 fn fetchM(col: f32, row: f32) -> vec4f {
     let uv = vec2f((col + 0.5) / f32(MAXM), (row + 0.5) / MROWS);
@@ -198,6 +205,7 @@ fn modifySplatCenter(center: ptr<function, vec3f>) {
             let pl = mPlane(best);
             let sd = dot(pl.xyz, *center) + pl.w;   // < 0 -> splat behind this mirror
             k = k * step(0.0, sd);
+            gRefl = 1.0;
         }
     }
     gKeep = k;
@@ -207,6 +215,8 @@ fn modifySplatRotationScale(originalCenter: vec3f, modifiedCenter: vec3f, rotati
 }
 fn modifySplatColor(center: vec3f, color: ptr<function, vec4f>) {
     (*color).a = (*color).a * gKeep;
+    // the engine skips a splat whose alpha ends up at the clip value
+    if (gRefl > 0.5 && (*color).a < uniform.uReflMinOpacity) { (*color).a = 0.0; }
 }
 `;
 

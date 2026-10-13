@@ -77,9 +77,10 @@ const rendererTable: Record<Config['renderer'], number> = {
 
 // quality budget, millions of splats
 const budgets = {
+    // SCANITY: phones get 1.5M in performance mode and 3M otherwise (upstream: 1M and 2M)
     mobile: {
-        low: 1,
-        high: 2
+        low: 1.5,
+        high: 3
     },
     desktop: {
         low: 2,

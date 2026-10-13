@@ -18,4 +18,13 @@ type MirrorConfig = {
     enabled: boolean;
 };
 
-export type { MirrorConfig, MirrorShape };
+// The optional "quality" section of mirrors.json, added by hand (see SCANITY.md):
+// the reflection's size as a fraction of the canvas, the opacity below which
+// splats are left out of reflections, and the finest LOD level reflections use.
+type MirrorQuality = {
+    resolution: number;
+    minOpacity: number;
+    lod: number;
+};
+
+export type { MirrorConfig, MirrorQuality, MirrorShape };

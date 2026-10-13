@@ -49,7 +49,8 @@ import {
     PIXELFORMAT_RGBA32F,
     PIXELFORMAT_RGBA8,
     PRIMITIVE_TRIANGLES,
-    SEMANTIC_POSITION
+    SEMANTIC_POSITION,
+    platform
 } from 'playcanvas';
 import type { AppBase, BoundingBox, CameraComponent, GraphicsDevice } from 'playcanvas';
 
@@ -64,21 +65,22 @@ import {
     MIRROR_SURFACE_VERTEX_WGSL,
     MIRROR_SURFACE_FRAGMENT_WGSL
 } from './shaders';
-import type { MirrorConfig } from './types';
+import type { MirrorConfig, MirrorQuality } from './types';
 
 // Fetches and lightly validates a mirrors.json. Deliberately not a full
 // schema validator (unlike settings.json) - this file is written by our own
 // export tool, not authored by hand, so a coarse shape check is enough to
 // avoid crashing on a stale/malformed export rather than to guard against
 // arbitrary input.
-const loadMirrors = async (url: string): Promise<MirrorConfig[]> => {
+const loadMirrors = async (url: string): Promise<{ mirrors: MirrorConfig[]; quality: MirrorQuality }> => {
     const response = await fetch(url);
     if (!response.ok) {
         throw new Error(`Failed to fetch mirrors.json: ${response.status}`);
     }
     const data = await response.json();
-    const mirrors = Array.isArray(data?.mirrors) ? data.mirrors : [];
-    return mirrors.filter(
+    const desktop = readQuality(data?.quality, DEFAULT_QUALITY);
+    const quality = platform.mobile ? readQuality(data?.quality?.mobile, desktop) : desktop;
+    const mirrors = (Array.isArray(data?.mirrors) ? data.mirrors : []).filter(
         (m: unknown): m is MirrorConfig =>
             !!m &&
             typeof m === 'object' &&
@@ -86,6 +88,25 @@ const loadMirrors = async (url: string): Promise<MirrorConfig[]> => {
             Array.isArray((m as MirrorConfig).rotation) &&
             typeof (m as MirrorConfig).radius === 'number'
     );
+    return { mirrors, quality };
+};
+
+// Without a quality section: full-size reflections with every splat in them, at
+// the main view's detail.
+const DEFAULT_QUALITY: MirrorQuality = { resolution: 1, minOpacity: 0, lod: 0 };
+
+// A quality section (or its "mobile" part), each key falling back to `fallback`
+// when missing or not a number.
+const readQuality = (section: unknown, fallback: MirrorQuality): MirrorQuality => {
+    const q = (section && typeof section === 'object' ? section : {}) as Partial<Record<keyof MirrorQuality, unknown>>;
+    const read = (value: unknown, def: number, min: number) =>
+        typeof value === 'number' && Number.isFinite(value) ? Math.min(Math.max(value, min), 1) : def;
+    return {
+        resolution: read(q.resolution, fallback.resolution, 0.05),
+        minOpacity: read(q.minOpacity, fallback.minOpacity, 0),
+        lod:
+            typeof q.lod === 'number' && Number.isFinite(q.lod) ? Math.max(0, Math.floor(q.lod)) : fallback.lod
+    };
 };
 
 // Tool defaults for every mirror (its MIRRORS table / buildPortalsFromData).
@@ -191,12 +212,14 @@ const mirrorMaterial = (): ShaderMaterial => {
     return mat;
 };
 
-// Reflection render target at canvas size (the tool's REFLECTION_SCALE = 1).
+// Reflection render target at the canvas size times the quality's resolution
+// (the tool's REFLECTION_SCALE). fitReflectionView works in this target's
+// pixels, so a smaller target renders the reflection with fewer pixels.
 // No flipY - see MIRROR_SURFACE_FRAGMENT_WGSL for how WebGPU is handled.
-const makeRT = (device: GraphicsDevice): RenderTarget => {
+const makeRT = (device: GraphicsDevice, scale: number): RenderTarget => {
     const colorBuffer = new Texture(device, {
-        width: Math.max(1, Math.floor(device.width)),
-        height: Math.max(1, Math.floor(device.height)),
+        width: Math.max(1, Math.floor(device.width * scale)),
+        height: Math.max(1, Math.floor(device.height * scale)),
         format: PIXELFORMAT_RGBA8,
         mipmaps: false,
         minFilter: FILTER_LINEAR,
@@ -274,7 +297,17 @@ class MirrorPortals {
     // The scene's bounds, which the reflection cameras fit their clip planes to.
     private sceneBound: BoundingBox;
 
+    private quality: MirrorQuality;
+
     private mirrorLayer: Layer;
+
+    // The layer the reflection cameras render, and the coarse copy of the splats
+    // on it when there is one (see createReflectionSplat)
+    private reflectionLayerId: number;
+
+    private reflectionLayer: Layer | null = null;
+
+    private reflectionSplat: Entity | null = null;
 
     private mirrors: Mirror[] = [];
 
@@ -292,10 +325,18 @@ class MirrorPortals {
 
     private resizeHandler = () => this.rebuildReflectionRTs();
 
-    constructor(app: AppBase, camera: Entity, configs: MirrorConfig[], sceneBound: BoundingBox) {
+    constructor(
+        app: AppBase,
+        camera: Entity,
+        gsplat: Entity,
+        configs: MirrorConfig[],
+        sceneBound: BoundingBox,
+        quality: MirrorQuality
+    ) {
         this.app = app;
         this.camEnt = camera;
         this.sceneBound = sceneBound;
+        this.quality = quality;
 
         const { graphicsDevice } = app;
 
@@ -329,12 +370,49 @@ class MirrorPortals {
         }
         camera.camera.layers = [...camera.camera.layers, this.mirrorLayer.id];
 
+        this.reflectionLayerId = this.createReflectionSplat(gsplat) ?? worldLayer?.id ?? -1;
+
         for (const config of configs.slice(0, MAX_MIRRORS)) {
             this.mirrors.push(this.createMirror(config));
         }
 
         this.installCullChunk();
         window.addEventListener('resize', this.resizeHandler);
+    }
+
+    // The engine fills every camera's splat budget, so a reflection camera drew as
+    // many splats as the main view, however small the mirror on screen - and
+    // sorted every one of them. A camera's budget and LOD range cannot be set
+    // apart from the main camera's, but a splat entity's LOD range can. So when
+    // the quality asks for coarser reflections, the reflection cameras draw a
+    // second entity on the same asset, at the same transform, limited to the
+    // coarser levels and on a layer only they render. It streams from the same
+    // octree, so nothing downloads twice; the main camera never sees it, and the
+    // cull chunk (on the shared unified material) clips it like the scene.
+    // Returns that layer, or null to keep reflecting the scene itself (no coarser
+    // levels asked for, or none in a single-file scene).
+    private createReflectionSplat(gsplat: Entity): number | null {
+        const levels = (gsplat.gsplat?.resource as { octree?: { lodLevels?: number } } | null)?.octree?.lodLevels ?? 0;
+        if (this.quality.lod < 1 || levels < 2 || !gsplat.gsplat || !gsplat.parent) {
+            return null;
+        }
+        const { app } = this;
+        this.reflectionLayer = new Layer({ name: 'MirrorReflections' });
+        app.scene.layers.push(this.reflectionLayer);
+
+        const copy = new Entity('gsplat-reflection', app);
+        copy.setLocalPosition(gsplat.getLocalPosition());
+        copy.setLocalRotation(gsplat.getLocalRotation());
+        copy.setLocalScale(gsplat.getLocalScale());
+        copy.addComponent('gsplat', {
+            unified: true,
+            asset: gsplat.gsplat.asset,
+            layers: [this.reflectionLayer.id]
+        });
+        copy.gsplat.lodRangeMin = Math.min(this.quality.lod, levels - 1);
+        gsplat.parent.addChild(copy);
+        this.reflectionSplat = copy;
+        return this.reflectionLayer.id;
     }
 
     private createMirror(config: MirrorConfig): Mirror {
@@ -356,16 +434,15 @@ class MirrorPortals {
         app.root.addChild(ent);
 
         // Per-portal reflection camera + render target.
-        const rt = makeRT(app.graphicsDevice);
+        const rt = makeRT(app.graphicsDevice, this.quality.resolution);
         const reflCam = new Entity('reflCam');
-        const worldLayer = app.scene.layers.getLayerByName('World');
         reflCam.addComponent('camera', {
             fov: camera.fov,
             nearClip: camera.nearClip,
             farClip: camera.farClip,
             clearColor: BG0,
             priority: -1,
-            layers: worldLayer ? [worldLayer.id] : []
+            layers: this.reflectionLayerId >= 0 ? [this.reflectionLayerId] : []
         });
         reflCam.enabled = false;
         reflCam.camera.renderTarget = rt;
@@ -421,7 +498,10 @@ class MirrorPortals {
             this.setU('uReflClipEnabled', 0);
             this.setU('uCullSoft', CULL_SOFT);
             this.setU('uMainCamPos', [0, 0, 0]);
+            this.setU('uReflMinOpacity', this.quality.minOpacity);
             this.cullReady = true;
+            // a frame to cut the holes with, in case nothing else asks for one
+            this.app.renderNextFrame = true;
         } catch (err) {
             console.warn('[mirrors] failed to install splat cull chunk:', err);
         }
@@ -439,7 +519,7 @@ class MirrorPortals {
     private rebuildReflectionRTs() {
         for (const m of this.mirrors) {
             const old = m.rt;
-            m.rt = makeRT(this.app.graphicsDevice);
+            m.rt = makeRT(this.app.graphicsDevice, this.quality.resolution);
             m.reflCam.camera.renderTarget = m.rt;
             m.mat.setParameter('tReflect', m.rt.colorBuffer);
             old.destroy();
@@ -644,7 +724,11 @@ class MirrorPortals {
     }
 
     // Called once per frame from the viewer's prerender hook - the tool's
-    // app.on("prerender") handler, minus its skydome and master toggle.
+    // app.on("prerender") handler, minus its skydome and master toggle. Unlike the
+    // tool it asks for no next frame: everything here follows the camera, so the
+    // viewer's own on-demand rendering (camera moves, streamed data) is enough,
+    // and a still scene with a mirror goes idle instead of drawing both passes
+    // every frame.
     update() {
         const { mirrors, mdataArr } = this;
         const camPos = this.camEnt.getPosition();
@@ -718,9 +802,8 @@ class MirrorPortals {
             this.setU('uCullSoft', CULL_SOFT);
             this.setU('uCullEnabled', count > 0 ? 1 : 0);
             this.setU('uReflClipEnabled', count > 0 ? 1 : 0);
+            this.setU('uReflMinOpacity', this.quality.minOpacity);
         }
-
-        this.app.renderNextFrame = true;
     }
 
     private texelBase(row: number, col: number) {
@@ -735,6 +818,12 @@ class MirrorPortals {
             m.ent.destroy();
         }
         this.mirrors = [];
+        this.reflectionSplat?.destroy();
+        this.reflectionSplat = null;
+        if (this.reflectionLayer) {
+            this.app.scene.layers.remove(this.reflectionLayer);
+            this.reflectionLayer = null;
+        }
     }
 }
 
