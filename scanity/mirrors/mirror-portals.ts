@@ -22,6 +22,8 @@
 //     than the texture matrix projects with, which shifts, scales and smears
 //     the reflection on the mirror.
 //   - Clip planes are the one lens setting NOT copied: see fitReflectionClip.
+//   - The reflection pass renders only the part of its picture the mirror
+//     shows, not the whole canvas: see fitReflectionView.
 //   - Shaders also have WGSL versions for WebGPU (see shaders.ts).
 //   - Mirrors only: no window portals, HDRI, selection or gizmo.
 import {
@@ -38,7 +40,9 @@ import {
     ShaderMaterial,
     Texture,
     Vec3,
+    Vec4,
     ADDRESS_CLAMP_TO_EDGE,
+    ASPECT_MANUAL,
     CULLFACE_NONE,
     FILTER_LINEAR,
     FILTER_NEAREST,
@@ -218,6 +222,10 @@ type Mirror = {
     rt: RenderTarget;
     reflCam: Entity;
     texMatrix: Mat4;
+    // the projection the reflection camera renders with, and the corner of its
+    // render target it renders into (see fitReflectionView)
+    renderProj: Mat4;
+    viewRect: Vec4;
     facing: boolean;
     cullFront: number;
     cullBack: number;
@@ -240,6 +248,23 @@ const _frCamInv = new Mat4();
 const _frVP = new Mat4();
 const _frustum = new Frustum();
 const _frSphere = new BoundingSphere();
+const _clipMat = new Mat4();
+const _crop = new Mat4();
+const _corner = new Vec4();
+const _quad = [new Vec4(), new Vec4(), new Vec4(), new Vec4()];
+const QUAD_SIGNS = [
+    [-1, -1],
+    [1, -1],
+    [1, 1],
+    [-1, 1]
+];
+
+// Pixels added around the mirror's footprint in the reflection pass, so
+// bilinear sampling at the mirror's edge never reads outside what was rendered.
+const VIEW_MARGIN = 2;
+
+// Mirror corners are clipped to w >= this before the perspective divide.
+const NEAR_W = 1e-4;
 
 class MirrorPortals {
     private app: AppBase;
@@ -344,6 +369,14 @@ class MirrorPortals {
         });
         reflCam.enabled = false;
         reflCam.camera.renderTarget = rt;
+        // The aspect stays the full render target's while the viewport shrinks
+        // to the mirror: the engine's LOD selection reads it, and fitReflectionView
+        // builds the projection itself
+        reflCam.camera.aspectRatioMode = ASPECT_MANUAL;
+        const renderProj = new Mat4();
+        reflCam.camera.calculateProjection = (projMat: Mat4) => {
+            projMat.copy(renderProj);
+        };
         app.root.addChild(reflCam);
 
         mat.setParameter('tReflect', rt.colorBuffer);
@@ -356,6 +389,8 @@ class MirrorPortals {
             rt,
             reflCam,
             texMatrix: new Mat4(),
+            renderProj,
+            viewRect: new Vec4(0, 0, 1, 1),
             facing: true,
             cullFront: config.cullFront,
             cullBack: config.cullBack
@@ -447,6 +482,103 @@ class MirrorPortals {
         reflCam.camera.nearClip = near;
     }
 
+    // Of the reflection camera's full-canvas picture, only the part inside the
+    // mirror's outline ever reaches the screen. So find the pixel rectangle the
+    // mirror covers in that picture, render only that: a projection cropped to
+    // the rectangle, drawn into a viewport of the same pixel size in the render
+    // target's corner. Splats outside it now fall outside the reflection camera's
+    // view and are dropped before they are drawn. The texture matrix takes the
+    // same crop, then scales into that corner, so the reflection lands exactly
+    // where it did with the full picture.
+    //
+    // Expects _proj (the full-canvas projection) and _viewMat (the reflection
+    // camera's view) set for this mirror.
+    private fitReflectionView(m: Mirror, world: Mat4, aspect: number) {
+        const { width, height } = m.rt;
+        const camera = this.camEnt.camera;
+        const reflCam = m.reflCam.camera;
+
+        // the mirror outline's bounds on its local plane
+        const { r, extent } = mirrorDims(m.config);
+        const halfH = m.config.shape === 'capsule' ? extent + r : m.config.shape === 'circle' ? r : extent;
+
+        // its corners in clip space, clipped to the near side (you can stand
+        // beside a mirror with part of it behind you), then their NDC bounds
+        _clipMat.mul2(_proj, _viewMat).mul(world);
+        for (let i = 0; i < 4; i++) {
+            _corner.set(QUAD_SIGNS[i][0] * r, QUAD_SIGNS[i][1] * halfH, 0, 1);
+            _clipMat.transformVec4(_corner, _quad[i]);
+        }
+        let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+        const include = (x: number, y: number, w: number) => {
+            x0 = Math.min(x0, x / w);
+            x1 = Math.max(x1, x / w);
+            y0 = Math.min(y0, y / w);
+            y1 = Math.max(y1, y / w);
+        };
+        for (let i = 0; i < 4; i++) {
+            const a = _quad[i];
+            const b = _quad[(i + 1) % 4];
+            if (a.w >= NEAR_W) {
+                include(a.x, a.y, a.w);
+            }
+            if (a.w >= NEAR_W !== b.w >= NEAR_W) {
+                const t = (NEAR_W - a.w) / (b.w - a.w);
+                include(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, NEAR_W);
+            }
+        }
+
+        // to whole pixels with a margin, within the target; the full target
+        // when nothing of the mirror is in front of the camera (it does not
+        // reflect then anyway)
+        const toPixels = (lo: number, hi: number, size: number) => {
+            if (!(lo <= hi)) return [0, size];
+            const p0 = Math.floor((Math.max(lo, -1) * 0.5 + 0.5) * size) - VIEW_MARGIN;
+            const p1 = Math.ceil((Math.min(hi, 1) * 0.5 + 0.5) * size) + VIEW_MARGIN;
+            const start = Math.min(Math.max(p0, 0), size - 1);
+            return [start, Math.min(Math.max(p1, start + 1), size)];
+        };
+        const [px0, px1] = toPixels(x0, x1, width);
+        const [py0, py1] = toPixels(y0, y1, height);
+
+        // crop: maps that rectangle's NDC range onto the whole viewport, in clip
+        // space (x' = kx x + tx w), so it composes with any projection
+        const ax0 = (px0 / width) * 2 - 1;
+        const ax1 = (px1 / width) * 2 - 1;
+        const ay0 = (py0 / height) * 2 - 1;
+        const ay1 = (py1 / height) * 2 - 1;
+        const kx = 2 / (ax1 - ax0);
+        const ky = 2 / (ay1 - ay0);
+        // prettier-ignore
+        _crop.set([
+            kx, 0, 0, 0,
+            0, ky, 0, 0,
+            0, 0, 1, 0,
+            -(ax0 + ax1) / (ax1 - ax0), -(ay0 + ay1) / (ay1 - ay0), 0, 1
+        ]);
+
+        // what the reflection camera renders with: its own clip planes (see
+        // fitReflectionClip), the main camera's lens, cropped
+        reflCam.aspectRatio = aspect;
+        m.renderProj
+            .setPerspective(camera.fov, aspect, reflCam.nearClip, reflCam.farClip, camera.horizontalFov)
+            .mul2(_crop, m.renderProj);
+
+        // the viewport: the rectangle's pixel size, in the target's corner. The
+        // engine floors rect * size, so nudge it up to land on whole pixels
+        m.viewRect.set(0, 0, (px1 - px0 + 0.01) / width, (py1 - py0 + 0.01) / height);
+        reflCam.rect = m.viewRect;
+
+        // texMatrix = cornerScale * bias * crop * proj * viewInverse(=camView) * mirrorWorld
+        m.texMatrix
+            .setScale((px1 - px0) / width, (py1 - py0) / height, 1)
+            .mul(BIAS)
+            .mul(_crop)
+            .mul(_proj)
+            .mul(_viewMat)
+            .mul(world);
+    }
+
     // Reflected virtual camera + projective texture matrix.
     private updateMirrorCamera(m: Mirror) {
         const { camEnt } = this;
@@ -489,9 +621,8 @@ class MirrorPortals {
         const aspect = m.rt.width / m.rt.height;
         _proj.setPerspective(camera.fov, aspect, camera.nearClip, camera.farClip, camera.horizontalFov);
 
-        // texMatrix = bias * proj * viewInverse(=camView) * mirrorWorld
         _viewMat.copy(reflCam.getWorldTransform()).invert();
-        m.texMatrix.copy(BIAS).mul(_proj).mul(_viewMat).mul(world);
+        this.fitReflectionView(m, world, aspect);
         m.mat.setParameter('textureMatrix', m.texMatrix.data as unknown as number[]);
         m.mat.setParameter('tReflect', m.rt.colorBuffer);
         return true;
