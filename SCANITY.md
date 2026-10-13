@@ -28,7 +28,7 @@ Current base: **SuperSplat Viewer 1.37.0** (PlayCanvas engine 2.23.0).
 | `help-panel.ts`, `help-strings.json` | The quick-start guide: opens by itself on the first visit (already while loading) with the controls of the current mode, desktop / touch tabs, "don't show again"; reopened from the info panel. Upstream's controls panel at the bottom right stays as it is |
 | `annotation-links.ts` | A button in an annotation's panel that opens a page in a new tab (e.g. booking), from `"extras": { "link": { "url": …, "label": … } }` on that annotation in the scene's `settings.json` |
 | `annotation-list.ts` | Clicking the annotation title opens a list of all annotations; on touch the navigator sits in the bottom row |
-| `mirrors/` | Live mirror reflections from `mirrors.json` |
+| `mirrors/` | Live mirror reflections from `mirrors.json`, at the quality its `quality` section asks for (see Mirror quality) |
 | `defaults.ts` | Gaming controls (joystick) on by default on touch when the scene is walkable |
 | `joystick.ts` | Marks the held joystick so the theme can brighten it |
 | `walk-only.ts` | `?walkonly`: keeps the viewer in walk mode |
@@ -42,6 +42,7 @@ Kept to a minimum and marked `SCANITY`:
 
 - `src/localization.ts`: two lines registering Czech
 - `src/ui/annotations.ts`: the hotspots are hidden only by the settings toggle, not while walking with gaming controls or while the toolbar is faded out
+- `src/viewer.ts`: the splat budget on phones, 1.5M in performance mode and 3M otherwise (upstream: 1M and 2M)
 - `src/locales/cs.json`: Czech strings (new file)
 - `package.json`: the `scanity:*` scripts
 - `.gitignore`: `site`
@@ -70,6 +71,29 @@ These are on top of upstream's, which are listed in `README.md`:
 | `webgpu` | Force WebGPU even for a scene with mirrors (the reflections then show what is behind the mirror wall) |
 | `walkonly` | Walk mode only, in a scene with walkable collision: no orbit, fly or animation tour, and their buttons and shortcuts are hidden; selecting an annotation still flies there, then walks on from that spot. Ignored in a scene without collision |
 | `lang=cs` | Czech, also detected from the browser |
+
+## Mirror quality (`mirrors.json`)
+
+Every reflecting mirror renders the scene a second time, so mirrors cost frame rate. The viewer already renders each reflection only over the part of the screen the mirror covers. A `quality` section next to `mirrors` in the scene's `mirrors.json` (added by hand after exporting from the tool) tunes that per scene, without a new viewer build:
+
+```json
+{
+  "quality": {
+    "resolution": 0.5,
+    "minOpacity": 0.2,
+    "lod": 1,
+    "mobile": { "resolution": 0.35, "minOpacity": 0.3, "lod": 3 }
+  },
+  "mirrors": [ … ]
+}
+```
+
+| Key | Meaning | Without it |
+| --- | ------- | ---------- |
+| `resolution` | Size of the reflection as a fraction of the canvas, `0`–`1`. `0.5` renders a quarter of the pixels | `1` (full) |
+| `minOpacity` | Splats fainter than this (`0`–`1`) are left out of the reflections, which saves drawing them; they still count in ministats' splat number and are still sorted | `0` (none left out) |
+| `lod` | The finest LOD level reflections draw, in a LOD scene (`lod-meta.json`). The engine fills each camera's splat budget, so without it a reflection draws and sorts as many splats as the main view; at `2` it draws the third level instead (e.g. 750k of 3M). Reflections then draw a copy of the scene limited to those levels, which streams from the same files. Ignored for a single-file scene | `0` (the main view's detail) |
+| `mobile` | Any of the above, used instead on phones and tablets | the values above |
 
 ## Deploying
 

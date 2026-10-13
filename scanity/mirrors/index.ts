@@ -50,11 +50,11 @@ const initMirrors = (viewer: ViewerHandle, mirrorsUrl: string) => {
         const gsplat = app.root.findByName('gsplat') as Entity | null;
         if (!camera?.camera || !gsplat?.gsplat) return;
 
-        if (configs.length === 0) {
+        if (configs.mirrors.length === 0) {
             app.off('prerender', onPrerender);
             return;
         }
-        portals = new MirrorPortals(app, camera, configs, sceneBound(gsplat));
+        portals = new MirrorPortals(app, camera, gsplat, configs.mirrors, sceneBound(gsplat), configs.quality);
         portals.update();
     };
 
