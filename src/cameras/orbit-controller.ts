@@ -1,14 +1,25 @@
 import { OrbitController as OrbitControllerPC, Pose, Vec2 } from 'playcanvas';
+import type { BoundingBox } from 'playcanvas';
 
 import type { Camera, CameraFrame, CameraController } from './camera';
 import { DEFAULT_CONTROLLER_DAMPING } from './camera-utils';
 
 const p = new Pose();
 
+// SCANITY: set by ?orbitonly (scanity/orbit-only.ts) before the viewer is created: the orbit stays on
+// the object, its focus inside the scene's box and its distance between NEAR and FAR times the box's
+// half diagonal, so a visitor can neither zoom into the object nor drift away from it
+const scanityOrbit = { bounded: false };
+const SCANITY_NEAR = 0.6;
+const SCANITY_FAR = 3.5;
+
 class OrbitController implements CameraController {
     controller: OrbitControllerPC;
 
     fov = 90;
+
+    // SCANITY: the nearest distance the orbit allows, see bound()
+    private minDistance = 0.01;
 
     constructor() {
         this.controller = new OrbitControllerPC();
@@ -41,12 +52,24 @@ class OrbitController implements CameraController {
         this._attach(camera);
     }
 
+    // SCANITY: keeps the orbit on the object in the box (see scanityOrbit)
+    bound(box: BoundingBox) {
+        const { center: c, halfExtents: h } = box;
+        const root = (this.controller as unknown as { _targetRootPose: Pose })._targetRootPose;
+        root.xRange.set(c.x - h.x, c.x + h.x);
+        root.yRange.set(c.y - h.y, c.y + h.y);
+        root.zRange.set(c.z - h.z, c.z + h.z);
+        const radius = h.length();
+        this.minDistance = radius * SCANITY_NEAR;
+        this.controller.zoomRange = new Vec2(this.minDistance, radius * SCANITY_FAR);
+    }
+
     private _attach(camera: Camera) {
         p.position.copy(camera.position);
         p.angles.copy(camera.angles);
-        p.distance = Math.max(camera.distance, this.controller.zoomRange.x);
+        p.distance = Math.max(camera.distance, this.minDistance);
         this.controller.attach(p, false);
     }
 }
 
-export { OrbitController };
+export { OrbitController, scanityOrbit };

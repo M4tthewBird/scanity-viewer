@@ -16,6 +16,7 @@ import { initJoystickFeedback } from './joystick';
 import { initLoadingBar, initLoadingCover } from './loading-bar';
 import { initLoadingGlow } from './loading-glow';
 import { initMirrors } from './mirrors';
+import { initOrbitOnly, prepareOrbitOnly } from './orbit-only';
 import { initWalkOnly } from './walk-only';
 
 declare global {
@@ -49,6 +50,9 @@ const sceneSettings = settings.then((json) => {
     return defaultSettings();
 });
 
+const orbitOnly = new URL(location.href).searchParams.has('orbitonly');
+if (orbitOnly) prepareOrbitOnly();
+
 const viewer = await createViewer({ container: document.body, settings: sceneSettings, ...options });
 
 // the instance root createViewer built inside the container
@@ -60,6 +64,10 @@ initLoadingGlow(viewer, root);
 
 if (new URL(location.href).searchParams.has('walkonly')) {
     initWalkOnly(viewer, root);
+}
+
+if (orbitOnly) {
+    initOrbitOnly(viewer, root);
 }
 
 if (mirrorsUrl) {

@@ -32,6 +32,7 @@ Current base: **SuperSplat Viewer 1.37.0** (PlayCanvas engine 2.23.0).
 | `defaults.ts` | Gaming controls (joystick) on by default on touch when the scene is walkable |
 | `joystick.ts` | Marks the held joystick so the theme can brighten it |
 | `walk-only.ts` | `?walkonly`: keeps the viewer in walk mode |
+| `orbit-only.ts` | `?orbitonly`: keeps the viewer in orbit mode, bounded to the object |
 | `loading-bar.ts` | Repaints upstream's orange loading bar in Scanity blue; keeps the canvas hidden over the grey gradient until the scene has loaded (no black screen) |
 | `loading-glow.ts` | "Sunlight Surprise" while loading: the Scanity mark on the grey, lit from behind by a slowly circling sun that brightens with the progress, the mark coming from a blur into focus; fades into the scene once loaded. Own WebGL2 shader, released afterwards |
 | `tester.html` | Embed test page: `/tester.html?id=ikka_gym` |
@@ -42,6 +43,7 @@ Kept to a minimum and marked `SCANITY`:
 
 - `src/localization.ts`: two lines registering Czech
 - `src/ui/annotations.ts`: the hotspots are hidden only by the settings toggle, not while walking with gaming controls or while the toolbar is faded out
+- `src/cameras/orbit-controller.ts`, `src/camera-manager.ts`: `?orbitonly` bounds the orbit to the scene's box (`scanityOrbit`, `bound()`); the scanity layer cannot reach the orbit controller through the handle
 - `src/viewer.ts`: the splat budget on phones, 1.5M in performance mode and 3M otherwise (upstream: 1M and 2M)
 - `src/locales/cs.json`: Czech strings (new file)
 - `package.json`: the `scanity:*` scripts
@@ -69,6 +71,7 @@ These are on top of upstream's, which are listed in `README.md`:
 | `id` | Scene folder in the R2 bucket, e.g. `?id=living_room` |
 | `mirrors` | URL of a `mirrors.json`, overriding the one in the scene folder (`?mirrors=` turns mirrors off) |
 | `webgpu` | Force WebGPU even for a scene with mirrors (the reflections then show what is behind the mirror wall) |
+| `orbitonly` | Orbit mode only, for an object such as a product scan: no fly, walk or animation tour, and their buttons and shortcuts are hidden. The orbit's focus stays inside the scene's box and its distance between 0.6 and 3.5 times the box's half diagonal, so the visitor can neither zoom into the object nor drift away from it. Collision is not needed |
 | `walkonly` | Walk mode only, in a scene with walkable collision: no orbit, fly or animation tour, and their buttons and shortcuts are hidden; selecting an annotation still flies there, then walks on from that spot. Ignored in a scene without collision |
 | `lang=cs` | Czech, also detected from the browser |
 

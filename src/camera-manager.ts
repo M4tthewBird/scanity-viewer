@@ -8,7 +8,7 @@ import { Camera } from './cameras/camera';
 import type { CameraFrame, CameraController } from './cameras/camera';
 import { FlyController } from './cameras/fly-controller';
 import { FlySource } from './cameras/fly-source';
-import { OrbitController } from './cameras/orbit-controller';
+import { OrbitController, scanityOrbit } from './cameras/orbit-controller';
 import type { TargetSource } from './cameras/target-navigation';
 import { WalkController } from './cameras/walk-controller';
 import { WalkSource } from './cameras/walk-source';
@@ -140,6 +140,8 @@ class CameraManager {
         };
 
         controllers.orbit.fov = resetCamera.fov;
+        // SCANITY: ?orbitonly holds the orbit on the object (scanity/orbit-only.ts)
+        if (scanityOrbit.bounded) controllers.orbit.bound(bbox);
         controllers.fly.fov = resetCamera.fov;
         controllers.fly.collision = collision;
         controllers.walk.collision = collision;
