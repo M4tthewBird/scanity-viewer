@@ -71,7 +71,7 @@ These are on top of upstream's, which are listed in `README.md`:
 | `id` | Scene folder in the R2 bucket, e.g. `?id=living_room` |
 | `mirrors` | URL of a `mirrors.json`, overriding the one in the scene folder (`?mirrors=` turns mirrors off) |
 | `webgpu` | Force WebGPU even for a scene with mirrors (the reflections then show what is behind the mirror wall) |
-| `orbitonly` | Orbit mode only, for an object such as a product scan: no fly or walk, and their buttons and shortcuts are hidden. The animation tour stays: a scene whose start mode is the tour plays it first, and the play button brings it back. The orbit's focus stays inside the scene's box and its distance between 0.6 and 3.5 times the box's half diagonal, so the visitor can neither zoom into the object nor drift away from it. Collision is not needed |
+| `orbitonly` | Orbit mode only, for an object such as a product scan: no fly or walk, and their buttons and shortcuts are hidden. The animation tour stays: a scene whose start mode is the tour plays it first, and the play button brings it back. The orbit's focus stays near the middle of the scene's box (within 30 % of its half size) and its distance between 0.75 and 5 times the box's half diagonal, so the visitor can neither zoom into the object nor drift away from it. Collision is not needed |
 | `walkonly` | Walk mode only, in a scene with walkable collision: no orbit, fly or animation tour, and their buttons and shortcuts are hidden; selecting an annotation still flies there, then walks on from that spot. Ignored in a scene without collision |
 | `lang=cs` | Czech, also detected from the browser |
 

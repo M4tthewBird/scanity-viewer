@@ -7,11 +7,13 @@ import { DEFAULT_CONTROLLER_DAMPING } from './camera-utils';
 const p = new Pose();
 
 // SCANITY: set by ?orbitonly (scanity/orbit-only.ts) before the viewer is created: the orbit stays on
-// the object, its focus inside the scene's box and its distance between NEAR and FAR times the box's
-// half diagonal, so a visitor can neither zoom into the object nor drift away from it
+// the object, its focus near the middle of the scene's box (within FOCUS of its half size each way) and
+// its distance between NEAR and FAR times the box's half diagonal, so a visitor can neither zoom into the
+// object nor drift away from it
 const scanityOrbit = { bounded: false };
-const SCANITY_NEAR = 0.6;
-const SCANITY_FAR = 3.5;
+const SCANITY_FOCUS = 0.3;
+const SCANITY_NEAR = 0.75;
+const SCANITY_FAR = 5;
 
 class OrbitController implements CameraController {
     controller: OrbitControllerPC;
@@ -56,9 +58,10 @@ class OrbitController implements CameraController {
     bound(box: BoundingBox) {
         const { center: c, halfExtents: h } = box;
         const root = (this.controller as unknown as { _targetRootPose: Pose })._targetRootPose;
-        root.xRange.set(c.x - h.x, c.x + h.x);
-        root.yRange.set(c.y - h.y, c.y + h.y);
-        root.zRange.set(c.z - h.z, c.z + h.z);
+        const f = SCANITY_FOCUS;
+        root.xRange.set(c.x - h.x * f, c.x + h.x * f);
+        root.yRange.set(c.y - h.y * f, c.y + h.y * f);
+        root.zRange.set(c.z - h.z * f, c.z + h.z * f);
         const radius = h.length();
         this.minDistance = radius * SCANITY_NEAR;
         this.controller.zoomRange = new Vec2(this.minDistance, radius * SCANITY_FAR);
