@@ -136,9 +136,7 @@ $nav-own-row-below: 560px;
 
     // ?walkonly (scanity/walk-only.ts): no camera mode toggle, no animation playback
     &.scn-orbitOnly {
-        .sse-buttonGroup:has(> .sse-orbitCamera),
-        .sse-buttonGroup:has(> .sse-play),
-        .sse-timelineContainer {
+        .sse-buttonGroup:has(> .sse-orbitCamera) {
             display: none !important;
         }
     }

@@ -5,8 +5,7 @@ import type { ViewerHandle } from '../src/index';
 const HIDDEN_SHORTCUTS = [
     'help.action.orbit-mode',
     'help.action.fly-mode',
-    'help.action.toggle-walk',
-    'help.action.play-pause'
+    'help.action.toggle-walk'
 ];
 
 // `?orbitonly`: an object seen from around it only, as a product scan. Called before the viewer
@@ -17,10 +16,10 @@ const prepareOrbitOnly = () => {
     scanityOrbit.bounded = true;
 };
 
-// After creation: every way into another mode (the toolbar, the 1 / 2 / 3 shortcuts, the
-// animation tour, a scene whose start mode is the tour) sets the camera mode, so whenever it
-// leaves orbit this puts it back. The mode buttons, playback and their shortcuts are hidden
-// (see `.scn-orbitOnly` in theme.scss).
+// After creation: the animation tour stays (a scene whose start mode is the tour plays it first,
+// and the play button brings it back); every other way out of orbit (the toolbar, the 2 / 3
+// shortcuts, walk) sets the camera mode, so whenever it goes to fly or walk this puts it back in
+// orbit. The mode buttons and their shortcuts are hidden (see `.scn-orbitOnly` in theme.scss).
 const initOrbitOnly = (viewer: ViewerHandle, root: HTMLElement) => {
     const { state, events } = viewer;
     root.classList.add('scn-orbitOnly');
@@ -28,7 +27,7 @@ const initOrbitOnly = (viewer: ViewerHandle, root: HTMLElement) => {
         root.querySelector(`.sse-infoShortcut [data-i18n="${key}"]`)?.closest('.sse-infoShortcut')?.classList.add('sse-hidden');
     }
     const stayInOrbit = () => {
-        if (state.cameraMode !== 'orbit') state.cameraMode = 'orbit';
+        if (state.cameraMode === 'fly' || state.cameraMode === 'walk') state.cameraMode = 'orbit';
     };
     const subscriptions = [events.on('cameraMode:changed', stayInOrbit), events.on('loaded:changed', stayInOrbit)];
     stayInOrbit();
