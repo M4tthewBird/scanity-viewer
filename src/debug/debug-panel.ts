@@ -1,7 +1,11 @@
 import { Vec3 } from 'playcanvas';
+import type { GSplatComponent } from 'playcanvas';
 
 import type { CameraManager } from '../camera-manager';
 import type { ScenePicker } from '../picker';
+import { DEBUG_MODES } from '../quality';
+import type { DebugMode } from '../quality';
+import { loadedSplats, readEngineVisibleSplats } from '../render/resident-set';
 import type { StochasticSplatRenderer } from '../render/stochastic-splat-renderer';
 import type { Global } from '../types';
 
@@ -16,6 +20,13 @@ import { PickDepthOverlay } from './pick-depth-overlay';
 const STYLE_ID = 'sse-debug-panel-style';
 const PANEL_CLASS = 'sse-debug-panel';
 
+// every row and button the same height, a row's gap between rows and a group's before a group
+const ROW_HEIGHT = 20;
+const ROW_GAP = 2;
+const GROUP_GAP = 8;
+// every option of every choice the same width, so the choices line up at the right
+const SEGMENT_WIDTH = '10ch';
+
 const STYLES = `
 .${PANEL_CLASS} {
     position: absolute;
@@ -29,15 +40,22 @@ const STYLES = `
     border-radius: 4px;
     pointer-events: auto;
     user-select: none;
-    min-width: 220px;
+    /* a fixed width, wide enough for the longest labels, so the panel keeps its layout as
+       values change and options are toggled */
+    box-sizing: border-box;
+    width: 56ch;
+    max-width: calc(100% - 16px);
 }
 .${PANEL_CLASS} .sse-debug-row {
     display: flex;
     justify-content: space-between;
+    align-items: center;
     gap: 12px;
     white-space: nowrap;
+    min-height: ${ROW_HEIGHT}px;
+    margin-top: ${ROW_GAP}px;
 }
-.${PANEL_CLASS} .sse-debug-row .sse-debug-label {
+.${PANEL_CLASS} .sse-debug-label {
     color: #888;
 }
 .${PANEL_CLASS} .sse-debug-row .sse-debug-value {
@@ -49,6 +67,7 @@ const STYLES = `
     border-radius: 2px;
     transition: background-color 0.15s ease;
     outline: none;
+    white-space: pre;
 }
 .${PANEL_CLASS} .sse-debug-row .sse-debug-value:hover {
     background: rgba(255, 255, 255, 0.08);
@@ -63,18 +82,18 @@ const STYLES = `
 .${PANEL_CLASS} .sse-debug-row .sse-debug-value.sse-flash-bad {
     background: rgba(220, 100, 100, 0.45);
 }
-.${PANEL_CLASS} .sse-debug-buttons {
-    display: flex;
-    gap: 6px;
-    margin-top: 6px;
-}
 .${PANEL_CLASS} button {
-    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     background: rgba(255, 255, 255, 0.08);
     color: #eee;
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 3px;
-    padding: 4px 8px;
+    box-sizing: border-box;
+    height: ${ROW_HEIGHT}px;
+    padding: 0 8px;
     font: inherit;
     cursor: pointer;
     transition: background-color 0.15s ease;
@@ -91,18 +110,138 @@ const STYLES = `
 .${PANEL_CLASS} input.sse-debug-paste {
     width: 100%;
     box-sizing: border-box;
-    margin-top: 6px;
+    height: ${ROW_HEIGHT}px;
+    margin-top: ${ROW_GAP}px;
     background: rgba(255, 255, 255, 0.08);
     color: #eee;
     border: 1px solid rgba(120, 180, 255, 0.6);
     border-radius: 3px;
-    padding: 4px 8px;
+    padding: 0 8px;
     font: inherit;
 }
 .${PANEL_CLASS} button.sse-debug-on {
     background: rgba(120, 180, 255, 0.35);
 }
+/* the camera's rows beside the view buttons, stacked a row each */
+.${PANEL_CLASS} .sse-debug-top {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 13ch;
+    column-gap: 12px;
+}
+.${PANEL_CLASS} .sse-debug-stack {
+    display: grid;
+    row-gap: ${ROW_GAP}px;
+    align-content: start;
+}
+/* a row whose label has small actions at the right */
+.${PANEL_CLASS} .sse-debug-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    min-height: ${ROW_HEIGHT}px;
+}
+.${PANEL_CLASS} .sse-debug-head .sse-debug-actions {
+    display: flex;
+    gap: 4px;
+}
+/* a group's label on the line of its controls, which line up at the right */
+.${PANEL_CLASS} .sse-debug-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    min-height: ${ROW_HEIGHT}px;
+    margin-top: ${GROUP_GAP}px;
+}
+/* a control that does not apply to the renderer in use */
+.${PANEL_CLASS} button:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+.${PANEL_CLASS} button:disabled:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+.${PANEL_CLASS} .sse-debug-off .sse-debug-label {
+    color: #555;
+}
+/* the splat counts: a label row over a value row */
+.${PANEL_CLASS} .sse-debug-table {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    column-gap: 8px;
+    row-gap: ${ROW_GAP}px;
+    margin-top: ${GROUP_GAP}px;
+}
+.${PANEL_CLASS} .sse-debug-table > span {
+    display: flex;
+    align-items: center;
+    min-height: ${ROW_HEIGHT}px;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+/* a choice of one: the options joined, the chosen one lit */
+.${PANEL_CLASS} .sse-debug-segments {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: ${SEGMENT_WIDTH};
+}
+.${PANEL_CLASS} .sse-debug-segments button {
+    border-radius: 0;
+    margin-left: -1px;
+}
+.${PANEL_CLASS} .sse-debug-segments button:first-child {
+    border-radius: 3px 0 0 3px;
+    margin-left: 0;
+}
+.${PANEL_CLASS} .sse-debug-segments button:last-child {
+    border-radius: 0 3px 3px 0;
+}
 `;
+
+// the renderer and mode choices' tooltips
+const MODE_TITLES: Record<DebugMode, string> = {
+    sorted: "The engine's renderer: splats sorted by depth and blended",
+    pixel: 'Stochastic, a coverage threshold per pixel (desktops)',
+    mobile: 'Stochastic, interleaved pixel sets with jittered strata (phones, tablets)',
+    sol: 'Stochastic, a solid ellipse per splat: the speed-of-light bound'
+};
+
+// a choice of one: a button per option
+type Segments<T> = Map<T, HTMLButtonElement>;
+
+// fills `host` with a button per option, each choosing its value
+const segments = <T>(
+    host: HTMLElement,
+    options: readonly { value: T; label: string; title?: string }[],
+    choose: (value: T) => void
+) => {
+    const buttons: Segments<T> = new Map();
+    for (const { value, label, title } of options) {
+        const button = document.createElement('button');
+        button.textContent = label;
+        if (title) button.title = title;
+        button.addEventListener('click', () => choose(value));
+        host.appendChild(button);
+        buttons.set(value, button);
+    }
+    return buttons;
+};
+
+// the counts read back from the gpu: in view, drawn, and the depth cull's removals (null without it)
+type SplatCounts = { onScreen: number; rendered: number; culled: number | null };
+
+// a count compactly: thousands and millions
+const count = (value: number | null) => {
+    if (value === null) return '—';
+    if (value >= 1e6) return `${(value / 1e6).toFixed(2)}M`;
+    if (value >= 1e3) return `${(value / 1e3).toFixed(1)}K`;
+    return `${value}`;
+};
+
+// lights the chosen option, or none
+const light = <T>(buttons: Segments<T> | null, chosen: T | null) => {
+    buttons?.forEach((button, value) => button.classList.toggle('sse-debug-on', value === chosen));
+};
 
 /** Show and query the viewer's MiniStats panel. */
 type MiniStatsSwitch = {
@@ -110,7 +249,8 @@ type MiniStatsSwitch = {
     show(value: boolean): void;
 };
 
-const fmt = (v: Vec3) => `${v.x.toFixed(3)}, ${v.y.toFixed(3)}, ${v.z.toFixed(3)}`;
+// each component padded to a fixed width, so the values hold their place as the camera moves
+const fmt = (v: Vec3) => [v.x, v.y, v.z].map((c) => c.toFixed(3).padStart(8)).join(',');
 
 // Accepts "1,2,3", "1, 2, 3", "1 2 3", with or without trailing whitespace.
 const parseVector = (text: string): [number, number, number] | null => {
@@ -131,20 +271,33 @@ class DebugPanel {
 
     private readonly _picker: ScenePicker;
 
-    // the stochastic renderer when this viewer opted in, for its depth cull toggle and counts
-    private readonly _splatRenderer: StochasticSplatRenderer | null;
+    // the stochastic renderer while it draws, for its depth cull toggle and counts: Performance
+    // Mode switches it in and out, and its controls show only while it is in
+    private _splatRenderer: StochasticSplatRenderer | null;
 
-    private _cullButton: HTMLButtonElement | null = null;
+    private _stochasticSection: HTMLDivElement | null = null;
 
-    private _taaButton: HTMLButtonElement | null = null;
+    private readonly _splatRendererChanged: { off(): void };
 
-    private _poplessButton: HTMLButtonElement | null = null;
+    // the choices, a button per option
+    private _modeButtons: Segments<DebugMode> | null = null;
 
-    private _culledValue: HTMLSpanElement | null = null;
+    private _taaButtons: Segments<'on' | 'off'> | null = null;
 
-    private _cullStatsFrames = 0;
+    private _cullButtons: Segments<'auto' | 'on' | 'off'> | null = null;
 
-    private _cullStatsPending = false;
+    // the splat counts
+    private _loadedValue: HTMLSpanElement | null = null;
+
+    private _selectedValue: HTMLSpanElement | null = null;
+
+    private _onScreenValue: HTMLSpanElement | null = null;
+
+    private _renderedValue: HTMLSpanElement | null = null;
+
+    private _countsFrames = 0;
+
+    private _countsPending = false;
 
     private _pickDepthOverlay: PickDepthOverlay | null = null;
 
@@ -183,8 +336,8 @@ class DebugPanel {
 
     private _onPrerender = () => this._render();
 
-    // the cull state is decided inside the frame, so its row refreshes after it
-    private _onFrameEnd = () => this._renderCull();
+    // the counts are the frame's, so they refresh after it
+    private _onFrameEnd = () => this._renderCounts();
 
     private _onKeyDown = (event: KeyboardEvent) => {
         // Ctrl+Shift+D — also accept Meta+Shift+D on macOS for parity
@@ -207,6 +360,13 @@ class DebugPanel {
         this._picker = picker;
         this._splatRenderer = splatRenderer;
         this._miniStats = miniStats;
+        this._splatRendererChanged = global.events.on(
+            'splatRenderer:changed',
+            (renderer: StochasticSplatRenderer | null) => {
+                this._splatRenderer = renderer;
+                this._renderStochastic();
+            }
+        );
         window.addEventListener('keydown', this._onKeyDown);
         if (global.config.debug) {
             this.show();
@@ -254,6 +414,7 @@ class DebugPanel {
         this.hide();
         this._pickDepthOverlay?.destroy();
         this._pickDepthOverlay = null;
+        this._splatRendererChanged.off();
         window.removeEventListener('keydown', this._onKeyDown);
         if (this._root) {
             this._root.remove();
@@ -278,29 +439,45 @@ class DebugPanel {
         const root = document.createElement('div');
         root.className = PANEL_CLASS;
         root.innerHTML = `
-            <div class="sse-debug-row"><span class="sse-debug-label">camera</span><span class="sse-debug-value" data-id="position" contenteditable="plaintext-only" spellcheck="false" title="Edit to set camera position">—</span></div>
-            <div class="sse-debug-row"><span class="sse-debug-label">focus</span><span class="sse-debug-value" data-id="focus" contenteditable="plaintext-only" spellcheck="false" title="Edit to look at this point">—</span></div>
-            <div class="sse-debug-buttons">
-                <button data-id="copy">Copy</button>
-                <button data-id="paste">Paste</button>
-            </div>
-            <div class="sse-debug-buttons">
-                <button data-id="screenshot">Screenshot</button>
-                <button data-id="pick-depth" title="Show the depth a navigation pick finds at every pixel">Show depth</button>
-                <button data-id="ministats" title="Show the engine's MiniStats graphs (the viewer then renders every frame)">MiniStats</button>
+            <div class="sse-debug-top">
+                <div>
+                    <div class="sse-debug-head">
+                        <span class="sse-debug-label">Camera</span>
+                        <span class="sse-debug-actions">
+                            <button data-id="copy" title="Copy the camera's state">Copy</button>
+                            <button data-id="paste" title="Paste a copied camera state">Paste</button>
+                        </span>
+                    </div>
+                    <div class="sse-debug-row"><span class="sse-debug-label">Position</span><span class="sse-debug-value" data-id="position" contenteditable="plaintext-only" spellcheck="false" title="Edit to set camera position">—</span></div>
+                    <div class="sse-debug-row"><span class="sse-debug-label">Focus</span><span class="sse-debug-value" data-id="focus" contenteditable="plaintext-only" spellcheck="false" title="Edit to look at this point">—</span></div>
+                </div>
+                <div class="sse-debug-stack">
+                    <button data-id="screenshot">Screenshot</button>
+                    <button data-id="pick-depth" title="Show the depth a navigation pick finds at every pixel">Show depth</button>
+                    <button data-id="ministats" title="Show the engine's MiniStats graphs (the viewer then renders every frame)">MiniStats</button>
+                </div>
             </div>
             <input class="sse-debug-paste" data-id="paste-field" placeholder="Clipboard blocked here: paste with Ctrl/Cmd+V" spellcheck="false" style="display: none">
-            ${
-                this._splatRenderer
-                    ? `
-            <div class="sse-debug-buttons">
-                <button data-id="depth-cull" title="Stochastic renderer: cull splats hidden in the previous frame's depth (auto suspends the test when it removes too little)">Depth cull</button>
-                <button data-id="taa" title="Stochastic renderer: accumulate the samples over frames (reprojected while the camera moves)">TAA</button>
-                <button data-id="popless" title="Stochastic renderer: give each fragment the depth of the Gaussian's peak along its ray, rather than the splat centre's">Popless</button>
+            <div data-id="renderer">
+                <div class="sse-debug-line">
+                    <span class="sse-debug-label">Renderer</span>
+                    <div class="sse-debug-segments" data-id="mode"></div>
+                </div>
+                <div data-id="stochastic">
+                    <div class="sse-debug-row"><span class="sse-debug-label">TAA</span><span class="sse-debug-segments" data-id="taa" title="Stochastic modes: accumulate the samples over frames (reprojected while the camera moves)"></span></div>
+                    <div class="sse-debug-row"><span class="sse-debug-label">Depth cull</span><span class="sse-debug-segments" data-id="depth-cull" title="Stochastic modes: cull splats hidden in the previous frame's depth (auto suspends the test when it removes too little)"></span></div>
+                </div>
             </div>
-            <div class="sse-debug-row"><span class="sse-debug-label">culled</span><span class="sse-debug-value" data-id="culled">—</span></div>`
-                    : ''
-            }
+            <div class="sse-debug-table" title="Splats in the files loaded (in use or cooling down), selected by the level of detail and budget, in view after the frustum cull (and a stochastic mode's random coverage), and drawn after the depth cull, with the share it removed">
+                <span class="sse-debug-label">Loaded</span>
+                <span class="sse-debug-label">Splats</span>
+                <span class="sse-debug-label">On screen</span>
+                <span class="sse-debug-label">Rendered</span>
+                <span data-id="loaded">—</span>
+                <span data-id="selected">—</span>
+                <span data-id="on-screen">—</span>
+                <span data-id="rendered">—</span>
+            </div>
         `;
         host.appendChild(root);
 
@@ -330,35 +507,68 @@ class DebugPanel {
         this._pickDepthButton.addEventListener('click', () => {
             this._setPickDepth(!this._pickDepthOverlay?.enabled);
         });
-        if (this._splatRenderer) {
-            this._cullButton = root.querySelector('[data-id="depth-cull"]')!;
-            this._taaButton = root.querySelector('[data-id="taa"]')!;
-            this._poplessButton = root.querySelector('[data-id="popless"]')!;
-            this._poplessButton.addEventListener('click', () => {
-                const renderer = this._splatRenderer!;
-                renderer.variant.popless = renderer.variant.popless === 'on' ? 'off' : 'on';
-                renderer.applyVariant();
-                this._renderCull();
-            });
-            this._culledValue = root.querySelector('[data-id="culled"]')!;
-            this._taaButton.addEventListener('click', () => {
-                const renderer = this._splatRenderer!;
-                renderer.variant.taa = renderer.variant.taa === 'on' ? 'off' : 'on';
-                renderer.applyVariant();
-                this._renderCull();
-            });
-            // cycles the cull mode: auto (the default) -> on (both grid levels) -> off
-            this._cullButton.addEventListener('click', () => {
-                const renderer = this._splatRenderer!;
-                const next = { auto: 'l2', l2: 'off', l1: 'off', off: 'auto' } as const;
-                renderer.variant.cull = next[renderer.variant.cull];
-                renderer.applyVariant();
-                this._renderCull();
-            });
-            this._renderCull();
+        this._stochasticSection = root.querySelector('[data-id="stochastic"]')!;
+        this._loadedValue = root.querySelector('[data-id="loaded"]')!;
+        this._selectedValue = root.querySelector('[data-id="selected"]')!;
+        this._onScreenValue = root.querySelector('[data-id="on-screen"]')!;
+        this._renderedValue = root.querySelector('[data-id="rendered"]')!;
+        // the renderer and mode where WebGPU offers them: sorted, pixel, mobile or sol
+        const { quality } = this._global;
+        if (quality.debugModes) {
+            this._buildRendererControls(root);
+        } else {
+            // no choice of renderer here (WebGL), so none of its rows
+            root.querySelector('[data-id="renderer"]')!.remove();
+            this._stochasticSection = null;
         }
+        this._renderStochastic();
         this._wireEditable(this._positionValue, 'position');
         this._wireEditable(this._focusValue, 'focus');
+    }
+
+    // the renderer and mode, and the stochastic renderer's choices
+    private _buildRendererControls(root: HTMLElement) {
+        const { quality } = this._global;
+        this._modeButtons = segments(
+            root.querySelector('[data-id="mode"]')!,
+            DEBUG_MODES.map((mode) => ({
+                value: mode,
+                label: mode[0].toUpperCase() + mode.slice(1),
+                title: MODE_TITLES[mode]
+            })),
+            (mode) => quality.setDebugMode(mode)
+        );
+        // each acts on the renderer in use; the rows are disabled while there is none
+        const onRenderer =
+            <T>(change: (renderer: StochasticSplatRenderer, value: T) => void) =>
+            (value: T) => {
+                if (!this._splatRenderer) return;
+                change(this._splatRenderer, value);
+                this._splatRenderer.applyVariant();
+                this._renderCull();
+            };
+        this._taaButtons = segments(
+            root.querySelector('[data-id="taa"]')!,
+            [
+                { value: 'on', label: 'On' },
+                { value: 'off', label: 'Off' }
+            ] as const,
+            onRenderer((renderer, value: 'on' | 'off') => {
+                renderer.variant.taa = value;
+            })
+        );
+        // on is both grid levels
+        this._cullButtons = segments(
+            root.querySelector('[data-id="depth-cull"]')!,
+            [
+                { value: 'auto', label: 'Auto' },
+                { value: 'on', label: 'On' },
+                { value: 'off', label: 'Off' }
+            ] as const,
+            onRenderer((renderer, value: 'auto' | 'on' | 'off') => {
+                renderer.variant.cull = value === 'on' ? 'l2' : value;
+            })
+        );
     }
 
     private _wireEditable(span: HTMLSpanElement, kind: 'position' | 'focus') {
@@ -455,45 +665,71 @@ class DebugPanel {
         }
     }
 
-    // the cull button shows the mode; the counts come back from the gpu every few frames
+    // the mode in use, and the stochastic renderer's rows, which apply only while it draws
+    private _renderStochastic() {
+        if (!this._stochasticSection) return;
+        light(this._modeButtons, this._global.quality.debugMode);
+        const drawing = !!this._splatRenderer;
+        this._stochasticSection.classList.toggle('sse-debug-off', !drawing);
+        for (const buttons of [this._taaButtons, this._cullButtons]) {
+            buttons?.forEach((button) => {
+                button.disabled = !drawing;
+            });
+        }
+        if (!drawing) {
+            light(this._taaButtons, null);
+            light(this._cullButtons, null);
+        }
+        this._renderCull();
+    }
+
+    // the stochastic renderer's choices as they are
     private _renderCull() {
         const renderer = this._splatRenderer;
-        if (!renderer || !this._cullButton || !this._culledValue) return;
+        if (!renderer) return;
         const mode = renderer.variant.cull;
-        this._cullButton.textContent = `Depth cull: ${mode === 'off' ? 'off' : mode === 'auto' ? 'auto' : 'on'}`;
-        this._cullButton.classList.toggle('sse-debug-on', mode !== 'off');
-        if (this._taaButton) {
-            this._taaButton.textContent = `TAA: ${renderer.variant.taa}`;
-            this._taaButton.classList.toggle('sse-debug-on', renderer.variant.taa === 'on');
-        }
-        if (this._poplessButton) {
-            this._poplessButton.textContent = `Popless: ${renderer.variant.popless}`;
-            this._poplessButton.classList.toggle('sse-debug-on', renderer.variant.popless === 'on');
-        }
-        if (mode === 'off') {
-            this._culledValue.textContent = 'off';
+        light(this._cullButtons, mode === 'l1' || mode === 'l2' ? 'on' : mode);
+        light(this._taaButtons, renderer.variant.taa);
+    }
+
+    // The counts, every few frames: loaded and selected from the engine, on screen and rendered
+    // back from the gpu, the stochastic renderer's projector or the engine's frustum cull
+    private _renderCounts() {
+        if (!this._loadedValue || !this._selectedValue || this._countsPending || this._countsFrames++ % 15 !== 0)
             return;
-        }
-        if (!renderer.culling) {
-            this._culledValue.textContent = renderer.cullSuspended ? 'suspended' : 'no previous frame';
-            return;
-        }
-        if (this._cullStatsPending || this._cullStatsFrames++ % 15 !== 0) return;
-        this._cullStatsPending = true;
-        renderer
-            .readStats()
-            .then(({ survivors, occluded }) => {
-                const total = survivors + occluded;
-                const pct = total > 0 ? ((100 * occluded) / total).toFixed(0) : '0';
-                if (this._culledValue && renderer.culling) {
-                    this._culledValue.textContent = `${pct}% (${occluded.toLocaleString()} of ${total.toLocaleString()})`;
-                }
-            })
+        const { app, camera } = this._global;
+        const gsplat = app.root.findComponent('gsplat') as GSplatComponent | null;
+        this._loadedValue.textContent = count(loadedSplats(gsplat?.resource));
+        this._selectedValue.textContent = count(app.stats.frame.gsplats);
+
+        const renderer = this._splatRenderer;
+        const layer = app.scene.layers.getLayerByName('World');
+        const read: Promise<SplatCounts | null> = renderer
+            ? renderer.readStats().then(({ survivors, occluded }) => ({
+                  onScreen: survivors + occluded,
+                  rendered: survivors,
+                  culled: renderer.culling ? occluded : null
+              }))
+            : camera.camera && layer
+              ? readEngineVisibleSplats(app, camera.camera, layer).then((visible): SplatCounts | null =>
+                    visible === null ? null : { onScreen: visible, rendered: visible, culled: null }
+                )
+              : Promise.resolve(null);
+        this._countsPending = true;
+        read.then((counts) => {
+            if (!this._onScreenValue || !this._renderedValue) return;
+            this._onScreenValue.textContent = count(counts?.onScreen ?? null);
+            const share =
+                counts && counts.culled !== null && counts.onScreen > 0
+                    ? `  −${((100 * counts.culled) / counts.onScreen).toFixed(0)}%`
+                    : '';
+            this._renderedValue.textContent = `${count(counts?.rendered ?? null)}${share}`;
+        })
             .catch(() => {
                 // a destroyed buffer or lost device; the next refresh tries again
             })
             .finally(() => {
-                this._cullStatsPending = false;
+                this._countsPending = false;
             });
     }
 
@@ -591,9 +827,7 @@ class DebugPanel {
 
     private _renderMiniStats() {
         if (!this._miniStats || !this._miniStatsButton) return;
-        const shown = this._miniStats.shown();
-        this._miniStatsButton.textContent = `MiniStats: ${shown ? 'on' : 'off'}`;
-        this._miniStatsButton.classList.toggle('sse-debug-on', shown);
+        this._miniStatsButton.classList.toggle('sse-debug-on', this._miniStats.shown());
     }
 
     private _screenshot() {

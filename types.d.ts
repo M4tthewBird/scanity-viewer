@@ -45,6 +45,19 @@ declare module 'playcanvas/scripts/esm/xr/xr-navigation.mjs' {
     export { XrNavigation };
 }
 
+declare module 'playcanvas/scripts/esm/parsers/spz-parser.mjs' {
+    class SpzParser {
+        constructor(app: pc.AppBase);
+        canParse(context: { ext: string }): boolean;
+        load(
+            url: string | { load: string; original: string },
+            callback: (err: string | null, resource?: unknown) => void,
+            asset?: pc.Asset
+        ): void;
+    }
+    export { SpzParser };
+}
+
 declare module 'playcanvas/scripts/esm/xr/xr-manipulation.mjs' {
     class XrManipulation extends pc.Script {
         target: pc.Entity | null;
@@ -65,6 +78,11 @@ declare module '*.css' {
 }
 
 declare module '*.js' {
+    const content: string;
+    export default content;
+}
+
+declare module '*.wasm' {
     const content: string;
     export default content;
 }

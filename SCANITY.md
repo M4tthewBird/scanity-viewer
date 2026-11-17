@@ -2,7 +2,7 @@
 
 The viewer behind `viewer.scanity.cz` is the [PlayCanvas SuperSplat viewer](https://github.com/playcanvas/supersplat-viewer) (MIT) with a Scanity layer on top. The repository keeps upstream's code as it is and adds Scanity in its own folder, so a new upstream release is a merge rather than a port.
 
-Current base: **SuperSplat Viewer 1.37.0** (PlayCanvas engine 2.23.0).
+Current base: **SuperSplat Viewer 1.43.2** (PlayCanvas engine 2.24.1).
 
 ## Layout
 
@@ -44,7 +44,7 @@ Kept to a minimum and marked `SCANITY`:
 - `src/localization.ts`: two lines registering Czech
 - `src/ui/annotations.ts`: the hotspots are hidden only by the settings toggle, not while walking with gaming controls or while the toolbar is faded out
 - `src/cameras/orbit-controller.ts`, `src/camera-manager.ts`: `?orbitonly` bounds the orbit to the scene's box (`scanityOrbit`, `bound()`); the scanity layer cannot reach the orbit controller through the handle
-- `src/viewer.ts`: the splat budget on phones, 1.5M in performance mode and 3M otherwise (upstream: 1M and 2M)
+- `src/quality.ts`: the phone rungs of the Quality slider's budget ladder, 1.5M at Performance and 3M at Default (upstream: 1M and 2M)
 - `src/locales/cs.json`: Czech strings (new file)
 - `package.json`: the `scanity:*` scripts
 - `.gitignore`: `site`

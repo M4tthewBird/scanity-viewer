@@ -3,9 +3,10 @@ dist
 public
 .DS_Store
 .npmrc
-.cursor
+.claude
 docs/bench
 docs/pick-depth.md
 docs/stochastic-renderer.md
 # SCANITY: the Scanity build (rollup.scanity.mjs)
 site
+/build

@@ -21,13 +21,13 @@ The app supports a number of URL parameters (these are subject to change):
 
 ### Content
 
-| Parameter   | Description                                                                               | Default                  |
-| ----------- | ----------------------------------------------------------------------------------------- | ------------------------ |
-| `settings`  | URL of the `settings.json` file                                                           | `./settings.json`        |
-| `content`   | URL of the scene file (`.ply`, `.sog`, `.compressed.ply`, `.meta.json`, `.lod-meta.json`) | `./scene.compressed.ply` |
-| `skybox`    | URL of an equirectangular skybox image                                                    |                          |
-| `poster`    | URL of an image to show while loading                                                     |                          |
-| `collision` | URL of a collision asset (`.glb` mesh, or voxel data). `voxel` is accepted as an alias.   |                          |
+| Parameter   | Description                                                                                                | Default                  |
+| ----------- | ---------------------------------------------------------------------------------------------------------- | ------------------------ |
+| `settings`  | URL of the `settings.json` file                                                                            | `./settings.json`        |
+| `content`   | URL of the scene file (`.ply`, `.sog`, `.compressed.ply`, `.meta.json`, `.lod-meta.json`, `.spz`, `.lcc2`) | `./scene.compressed.ply` |
+| `skybox`    | URL of an equirectangular skybox image                                                                     |                          |
+| `poster`    | URL of an image to show while loading                                                                      |                          |
+| `collision` | URL of a collision asset (`.glb` mesh, or voxel data). `voxel` is accepted as an alias.                    |                          |
 
 ### UI
 
@@ -41,15 +41,15 @@ The app supports a number of URL parameters (these are subject to change):
 
 ### Renderer
 
-By default the viewer uses WebGPU when available (falling back automatically when not). The flag below forces the WebGL renderer (also required for WebXR / AR / VR):
+By default the viewer uses WebGPU when available (falling back automatically when not). The flag below forces the WebGL renderer:
 
 | Parameter     | Description                                                                                                                                                                      |
 | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `webgl`       | Force the WebGL renderer (required for AR/VR)                                                                                                                                    |
-| `aa`          | Enable antialiasing (WebGL only)                                                                                                                                                 |
-| `stochastic`  | Experimental: opt in to the stochastic splat renderer (unsorted, depth-tested splats). WebGPU only; the sorted renderer draws on WebGL and in XR.                                |
-| `splatSource` | Developer knob for the stochastic renderer: the data path feeding it (`workbuffer`, the default)                                                                                 |
-| `variant`     | Developer knob for the stochastic renderer: comma-separated `key:value` experiment switches, e.g. `spp:1,compose:none`                                                           |
+| `webgl`       | Force the WebGL renderer                                                                                                                                                         |
+| `aa`          | Force the anti-aliasing compensation for splats: `?aa`, `?aa=1`, `?aa=true`, `?aa=enable` on, other values off (default: per splat, from the file)                               |
+| `stochastic`  | Experimental unsorted, depth-tested splat renderer: `stochastic` for per-pixel quality, `stochastic=mobile` for phones and headsets. WebGPU only, its XR included                |
+| `splatSource` | Developer knob for the stochastic renderer: the data path feeding it (`direct`, the default, reads the resident files in place; `workbuffer` reads the engine's work buffer)     |
+| `variant`     | Developer knob for the stochastic renderer: comma-separated `key:value` experiment switches over the mode's, e.g. `taaSharp:8`                                                   |
 | `nofx`        | Disable post effects                                                                                                                                                             |
 | `hpr`         | Override `highPrecisionRendering` from settings (`?hpr`, `?hpr=1`, `?hpr=true`, `?hpr=enable` to enable)                                                                         |
 | `budget`      | Override the splat budget, in millions of splats                                                                                                                                 |
@@ -61,6 +61,10 @@ By default the viewer uses WebGPU when available (falling back automatically whe
 ## NPM Package
 
 See the [API reference](docs/api.md) for embedding, runtime control, UI customization and settings.
+
+## Developing with AI
+
+Coding agents: start from the [SuperSplat guides index](https://developer.playcanvas.com/user-manual/supersplat/llms.txt), which covers the viewer and links a Markdown version of every page.
 
 ## Local Development
 

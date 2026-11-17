@@ -67,5 +67,14 @@
     "xr-modal.title": "WebGLが必要です",
     "xr-modal.message": "ARとVRはWebGPUレンダラーでは利用できません。OKを押すとWebGLでビューアーを再読み込みします。",
     "xr-modal.cancel": "キャンセル",
-    "xr-modal.ok": "OK"
+    "xr-modal.ok": "OK",
+    "vr-prompt.loading": "読み込み中…",
+    "vr-prompt.enter": "タップしてVRを開始",
+    "xr-menu.exit-vr": "VRを終了",
+    "xr-menu.exit-ar": "ARを終了",
+    "xr-menu.ice-cream": "アイスクリームモード",
+    "xr-hint.place": "ピンチして床かテーブルを指し、離す",
+    "xr-hint.place-controller": "トリガーを押したまま床かテーブルを指し、離す",
+    "xr-hint.place-screen": "床かテーブルをタッチして配置、2本指で拡大縮小と回転",
+    "xr-hint.stalled": "反応がない場合は、タブを切り替えてから戻ってください。"
 }

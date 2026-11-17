@@ -213,7 +213,25 @@
                     <div class="sse-toggleTrack"><div class="sse-toggleThumb"></div></div>
                 </div>
             </div>
-            <div class="sse-performanceModeRow sse-settingsRow">
+            <!-- the Quality slider: the position and its budget, then a track with four stops, those the
+                 device cannot hold disabled; the thumb drags and snaps to the nearest available stop -->
+            <div class="sse-qualityRow sse-settingsRow">
+                <div class="sse-qualityOption" data-i18n="settings.quality">Quality</div>
+                <div class="sse-qualityValue"></div>
+            </div>
+            <div class="sse-qualitySliderRow sse-settingsRow">
+                <div class="sse-qualityTrack">
+                    <div class="sse-qualityRail">
+                        <div class="sse-qualityStop"></div>
+                        <div class="sse-qualityStop"></div>
+                        <div class="sse-qualityStop"></div>
+                        <div class="sse-qualityStop"></div>
+                        <div class="sse-qualityThumb"></div>
+                    </div>
+                </div>
+            </div>
+            <!-- Performance Mode: the stochastic renderer, on WebGPU except standalone headsets -->
+            <div class="sse-performanceModeRow sse-settingsRow sse-hidden">
                 <div class="sse-performanceModeOption" data-i18n="settings.performance-mode">Performance Mode</div>
                 <div class="sse-performanceModeCheck sse-toggleSwitch">
                     <div class="sse-toggleTrack"><div class="sse-toggleThumb"></div></div>
@@ -320,6 +338,21 @@
             </div>
         </div>
     </div>
+
+    <!-- The vr flag's prompt: a tap on its pill enters VR, as soon as the scene is placed, and a tap
+         elsewhere dismisses it -->
+    <div class="sse-vrPrompt sse-hidden" onwheel="event.stopPropagation()">
+        <button class="sse-vrPromptPill" type="button">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24">
+                <g class="sse-stroke"><use href="#vrIcon" /></g>
+                <g class="sse-fill"><use href="#vrIcon" /></g>
+            </svg>
+            <span class="sse-vrPromptText" data-i18n="vr-prompt.loading">Loading…</span>
+        </button>
+    </div>
+
+    <!-- What to do when Safari on Apple Vision Pro stalls a VR request (ui/xr-hint.ts) -->
+    <div class="sse-xrHint sse-hidden" data-i18n="xr-hint.stalled">Nothing happening? Switch tabs and back.</div>
 </div>
 
 <!-- SVG Icons -->

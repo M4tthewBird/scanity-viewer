@@ -1,12 +1,12 @@
 // How per-splat data reaches the projector. The renderer is the same for every source; only
 // the wgsl that reads a splat and the way the projector is bound and dispatched differ, so the
-// data paths in the plan (engine work buffer, direct sog reads, a light work buffer) can be
-// swapped and profiled against each other.
+// two data paths (the engine's work buffer, the resident files read in place) can be swapped
+// and profiled against each other.
 import type { Compute, GraphicsDevice } from 'playcanvas';
 
 import type { EngineManager, ResidentNode, ResidentSet } from './resident-set';
 
-type SplatSourceKind = 'workbuffer' | 'direct' | 'light';
+type SplatSourceKind = 'workbuffer' | 'direct';
 
 /** One projector dispatch: a contiguous run of the chunk table. */
 type DispatchGroup = {
@@ -22,7 +22,8 @@ type SplatSource = {
     /**
      * Wgsl declaring this source's bindings from `bindingBase` upward and defining
      * `srcCenter()` (world space; call first), `srcOpacity()` (second), `srcRotation()`
-     * (w, x, y, z), `srcScale()` and `srcColor()` (last) for the splat set by `setSplat(index)`.
+     * (w, x, y, z), `srcScale()` and `srcColor()` (last) for the splat set by `setSplat(index)`,
+     * and `srcAntiAlias()`, whether the splat was trained with anti-aliasing (after `srcCenter()`).
      */
     readChunk(bindingBase: number): string;
 
@@ -40,6 +41,18 @@ type SplatSource = {
 
     /** Called once per world-state version, before the frame's dispatch. */
     update(set: ResidentSet, manager: EngineManager): void;
+
+    /**
+     * The engine's own renderer is about to draw the splats (xr): undo any interference with
+     * its work buffer. {@link update} runs again before the next stochastic frame.
+     */
+    suspend(): void;
+
+    /**
+     * The frame's commands have been submitted (the app's `frameend`): release whatever this
+     * frame's dispatches were the last to read.
+     */
+    frameEnd(): void;
 
     /** How the projector is dispatched this frame. */
     dispatchPlan(set: ResidentSet, numChunks: number): DispatchGroup[];

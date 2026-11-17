@@ -4,6 +4,7 @@ import type { EventHandler } from 'playcanvas';
 import { version as appVersion } from '../package.json';
 
 import type { Picker } from './picker';
+import { QUALITY_LEVELS } from './quality';
 import { Tooltip } from './tooltip';
 import type { Global, ViewerHandle } from './types';
 import { initAnnotationControls } from './ui/annotation-controls';
@@ -13,7 +14,10 @@ import { initControlsHint, readControlsOpen, writeControlsOpen } from './ui/cont
 import { initFullscreenControls } from './ui/fullscreen-controls';
 import { initJoystick } from './ui/joystick';
 import { initPlayback } from './ui/playback';
+import { initVrPrompt } from './ui/vr-prompt';
 import { initXrControls } from './ui/xr-controls';
+import { initXrHint } from './ui/xr-hint';
+import { visionPro } from './xr';
 
 // show the poster image over the hidden canvas, blurry at first and sharpening as loading
 // progresses, until the first frame renders
@@ -97,9 +101,12 @@ const initUI = (
         'orbitCamera',
         'flyCamera',
         'fpsCamera',
+        'qualityValue',
+        'qualityTrack',
+        'qualityRail',
+        'qualityThumb',
         'performanceModeRow',
         'performanceModeCheck',
-        'performanceModeOption',
         'gamingControlsRow',
         'gamingControlsCheck',
         'gamingControlsOption',
@@ -180,7 +187,48 @@ const initUI = (
         dom.loadingWrap.classList.add('sse-hidden');
     });
 
-    // Performance mode toggle
+    // The Quality slider: a stop per position, the ones the device cannot hold disabled. A press
+    // or drag on the track moves the thumb to the nearest available stop
+    const qualityStops = Array.from(dom.qualityRail.querySelectorAll<HTMLElement>('.sse-qualityStop'));
+    const stopLeft = (index: number) => `${(index / (QUALITY_LEVELS.length - 1)) * 100}%`;
+    qualityStops.forEach((stop, i) => {
+        stop.style.left = stopLeft(i);
+    });
+
+    const pickQuality = (event: PointerEvent) => {
+        const rail = dom.qualityRail.getBoundingClientRect();
+        const t = rail.width > 0 ? Math.min(1, Math.max(0, (event.clientX - rail.left) / rail.width)) : 0;
+        const at = t * (QUALITY_LEVELS.length - 1);
+        // the nearest available stop to the pointer
+        const nearest = state.qualityAvailable
+            .map((level) => ({ level, distance: Math.abs(QUALITY_LEVELS.indexOf(level) - at) }))
+            .sort((a, b) => a.distance - b.distance)[0];
+        if (nearest && nearest.level !== state.quality) state.quality = nearest.level;
+    };
+    dom.qualityTrack.addEventListener('pointerdown', (event: PointerEvent) => {
+        if (event.button !== 0) return;
+        dom.qualityTrack.setPointerCapture(event.pointerId);
+        pickQuality(event);
+    });
+    dom.qualityTrack.addEventListener('pointermove', (event: PointerEvent) => {
+        if (dom.qualityTrack.hasPointerCapture(event.pointerId)) pickQuality(event);
+    });
+
+    const updateQuality = () => {
+        dom.qualityThumb.style.left = stopLeft(QUALITY_LEVELS.indexOf(state.quality));
+        const budget = global.quality.levels().find((entry) => entry.level === state.quality)?.budget;
+        dom.qualityValue.textContent = `${localize(`settings.quality-${state.quality}`)}${budget == null ? '' : ` · ${budget}M`}`;
+        qualityStops.forEach((stop, i) => {
+            stop.classList.toggle('sse-disabled', !state.qualityAvailable.includes(QUALITY_LEVELS[i]));
+        });
+    };
+    on('quality:changed', updateQuality);
+    on('qualityAvailable:changed', updateQuality);
+    updateQuality();
+
+    // Performance Mode, the stochastic renderer's toggle, where it can switch the renderer: the
+    // device offers it and the stochastic flag does not force the renderer
+    dom.performanceModeRow.classList.toggle('sse-hidden', !global.quality.switchable);
     dom.performanceModeRow.addEventListener('click', () => {
         state.performanceMode = !state.performanceMode;
     });
@@ -450,6 +498,12 @@ const initUI = (
     disposers.push(initControlsHint(viewer, root, localize));
     disposers.push(initFullscreenControls(viewer, root));
     disposers.push(initXrControls(viewer, root));
+    if (visionPro) {
+        disposers.push(initXrHint(viewer, root));
+    }
+    if (global.config.vr) {
+        disposers.push(initVrPrompt(viewer, root, localize));
+    }
 
     // Collision overlay: a settings row and the matching info-panel shortcut, shown only when
     // the scene ships an overlay

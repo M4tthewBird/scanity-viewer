@@ -67,5 +67,14 @@
     "xr-modal.title": "WebGL 필요",
     "xr-modal.message": "AR과 VR은 WebGPU 렌더러에서 지원되지 않습니다. 확인을 누르면 WebGL로 뷰어를 다시 불러옵니다.",
     "xr-modal.cancel": "취소",
-    "xr-modal.ok": "확인"
+    "xr-modal.ok": "확인",
+    "vr-prompt.loading": "로드 중…",
+    "vr-prompt.enter": "탭하여 VR 시작",
+    "xr-menu.exit-vr": "VR 종료",
+    "xr-menu.exit-ar": "AR 종료",
+    "xr-menu.ice-cream": "아이스크림 모드",
+    "xr-hint.place": "집은 채로 바닥이나 테이블을 가리키고 놓기",
+    "xr-hint.place-controller": "트리거를 누른 채 바닥이나 테이블을 가리키고 놓기",
+    "xr-hint.place-screen": "바닥이나 테이블을 터치해 배치, 두 손가락으로 크기 조절과 회전",
+    "xr-hint.stalled": "반응이 없나요? 다른 탭으로 전환했다가 돌아오세요."
 }
