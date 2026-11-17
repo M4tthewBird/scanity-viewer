@@ -3,11 +3,27 @@
 // streaming and the block allocator (one slot range per node); the stochastic renderer
 // consumes its decisions and owns everything after them.
 //
-// Read through the engine's internal (@ignore) gsplat-unified classes until the public
-// `world:update` api lands (engine change E3 in the plan). Every internal shape used is
+// Read through the engine's internal (@ignore) gsplat-unified classes until the engine has a
+// public api for them (a `world:update` event). Every internal shape used is
 // narrowed here to the members this file reads, so a change in the engine fails in one place.
+//
+// The engine's own splat rendering is switched off after the fact, through the same internals:
+// the provider takes the engine's renderer over once it exists (its render prep returns false
+// and its mesh instance is hidden, so it never builds its projector, sorter or cache), and the
+// direct source stops the work buffer's copies and keeps its textures at 1x1. The engine then
+// runs LOD, streaming and allocation and nothing else.
 import { Vec3 } from 'playcanvas';
-import type { AppBase, BoundingBox, CameraComponent, EventHandle, Layer, Mat4, Texture } from 'playcanvas';
+import type {
+    AppBase,
+    BoundingBox,
+    CameraComponent,
+    EventHandle,
+    GraphicsDevice,
+    Layer,
+    Mat4,
+    StorageBuffer,
+    Texture
+} from 'playcanvas';
 
 type EngineFormat = {
     hash: number;
@@ -18,12 +34,16 @@ type EngineFormat = {
 };
 
 type EngineWorkBuffer = {
+    device: GraphicsDevice;
     format: EngineFormat;
     textureSize: number;
     getTexture(name: string): Texture;
     // the copy passes: every changed node, and the colour-only sh refresh
     render: (...args: unknown[]) => void;
     renderColor: (...args: unknown[]) => void;
+    // sizes the textures to the allocator's address space, growing the order buffer with them
+    resize: (textureSize: number) => void;
+    orderBuffer: StorageBuffer;
 };
 
 // a loaded splat file (sog, ply or compressed ply): its textures, format and decode constants
@@ -34,6 +54,17 @@ type EngineResource = {
     textureDimensions: { x: number; y: number };
     parameters: Map<string, unknown>;
     configureMaterialDefines(defines: Map<string, string>): void;
+    /** Whether the file's splats were trained with anti-aliasing (from the file, or the engine's override). */
+    antiAlias: boolean;
+    /**
+     * The sog file's metadata (its format version; the v2 codebooks are 256 floats each), and the
+     * file's textures by stream name, which it destroys when the engine unloads the file.
+     */
+    gsplatData?: { meta?: { version?: number; shN?: { codebook?: number[] } } };
+    /** Sog resources: let each texture drop its cpu image source, at once if already uploaded. */
+    releaseTextureSources?(): void;
+    /** The materials the engine's work buffer copies the file with, which bind its textures once, when made. */
+    workBufferRenderInfos: Map<string, { material: { setParameter(name: string, value: Texture): void } }>;
 };
 
 type EngineOctreeNode = {
@@ -69,11 +100,19 @@ type EngineRenderer = {
     // the hybrid renderer's gpu pipeline, created lazily by its render prep and its pick prep
     gpuSorter?: { destroy(): void } | null;
     projector?: { destroy(): void } | null;
-    intervalCompaction?: { destroy(): void } | null;
+    intervalCompaction?: {
+        destroy(): void;
+        /** The splats its frustum cull kept last time it ran, which its draw is sized by. */
+        numSplatsBuffer?: StorageBuffer;
+    } | null;
 };
 
 type EngineManager = {
-    world: { currentState: EngineWorldState | undefined; workBuffer: EngineWorkBuffer };
+    world: {
+        currentState: EngineWorldState | undefined;
+        workBuffer: EngineWorkBuffer;
+        invalidate(opts: { workBuffer?: boolean }): void;
+    };
     renderer: EngineRenderer;
 };
 
@@ -177,7 +216,14 @@ class EngineResidentSetProvider {
                 this.takeOver(manager);
                 const state = manager.world.currentState;
                 if (!state) return;
-                const changed = !this.set || this.set.version !== state.version;
+                // A file's entity can move without a new world state (an XR grab moves a single
+                // file's, whose state never changes): the set's matrices and bounds follow it
+                const changed =
+                    !this.set ||
+                    this.set.version !== state.version ||
+                    state.splats.some(
+                        (info, i) => !this.set.files[i]?.modelMatrix.equals(info.node.getWorldTransform())
+                    );
                 if (changed) {
                     this.set = buildResidentSet(state);
                 }
@@ -205,6 +251,9 @@ class EngineResidentSetProvider {
             if (manager) this.takeOver(manager);
         } else {
             this.restore();
+            // the direct source skipped the engine's copies while it drew, so the work buffer is
+            // stale for whatever streamed in since; the engine's renderer needs it rebuilt in full
+            this.manager()?.world.invalidate({ workBuffer: true });
         }
     }
 
@@ -337,5 +386,33 @@ const buildResidentSet = (state: EngineWorldState): ResidentSet => {
     };
 };
 
-export { EngineResidentSetProvider };
+// TEMPORARY, until the engine reports these (an upstream PR, noted in docs/follow-up-plan.md):
+// counts for the debug panel, read through the same internals. The splats in the files the
+// engine has loaded for a resource (in use or cooling down), or a single file's own
+const loadedSplats = (resource: unknown) => {
+    const loaded = resource as {
+        numSplats?: number;
+        octree?: { fileResources: Map<number, { numSplats: number }> } | null;
+    } | null;
+    if (!loaded) return null;
+    if (!loaded.octree) return loaded.numSplats ?? null;
+    let count = 0;
+    for (const file of loaded.octree.fileResources.values()) count += file.numSplats;
+    return count;
+};
+
+// the splats the engine's own gpu-sorted renderer kept after its frustum cull the last time it
+// drew for this camera and layer, or null where it has not (WebGL's cpu sort, or the stochastic
+// renderer drawing instead)
+const readEngineVisibleSplats = async (app: AppBase, camera: CameraComponent, layer: Layer) => {
+    const director = (app.renderer as unknown as { gsplatDirector?: EngineDirector | null }).gsplatDirector;
+    const manager = director?.camerasMap.get(camera.camera)?.layersMap.get(layer)?.gsplatManager;
+    const buffer = manager?.renderer.intervalCompaction?.numSplatsBuffer;
+    if (!buffer) return null;
+    const data = new Uint32Array(1);
+    await buffer.read(0, 4, data, true);
+    return data[0];
+};
+
+export { EngineResidentSetProvider, loadedSplats, readEngineVisibleSplats };
 export type { EngineManager, EngineResource, EngineWorkBuffer, ResidentFile, ResidentNode, ResidentSet };

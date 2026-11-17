@@ -15,6 +15,7 @@ import resolve from '@rollup/plugin-node-resolve';
 import autoprefixer from 'autoprefixer';
 import postcss from 'postcss';
 import scss from 'rollup-plugin-scss';
+import { string } from 'rollup-plugin-string';
 import sass from 'sass';
 import ts from 'typescript';
 
@@ -84,6 +85,21 @@ function pages() {
     };
 }
 
+// upstream's wasm decoders (gsaf animated splats, zstd for spz version 4), as in its
+// rollup.config.mjs: the glue bundled as a string, the wasm emitted beside index.js
+function wasmDecoder(name) {
+    return [
+        string({ include: [`lib/${name}/*.js`] }),
+        {
+            name: `${name}-decoder-wasm`,
+            generateBundle() {
+                const fileName = `${name}-decoder.wasm`;
+                this.emitFile({ type: 'asset', fileName, source: readFileSync(`lib/${name}/${fileName}`) });
+            }
+        }
+    ];
+}
+
 const buildCss = {
     input: 'scanity/index.scss',
     output: { dir: outDir },
@@ -114,6 +130,8 @@ const buildJs = {
     output: { dir: outDir, entryFileNames: 'index.js', format: 'esm', sourcemap: true },
     plugins: [
         resolve(process.env.ENGINE === 'debug' ? { exportConditions: ['development'] } : {}),
+        ...wasmDecoder('gsaf'),
+        ...wasmDecoder('zstd'),
         transpileTypescript(),
         json(),
         htmlTemplate(),

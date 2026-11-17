@@ -67,5 +67,14 @@
     "xr-modal.title": "WebGL requis",
     "xr-modal.message": "L'AR et la VR ne sont pas prises en charge par le moteur de rendu WebGPU. Cliquer sur OK rechargera le visualiseur avec WebGL.",
     "xr-modal.cancel": "Annuler",
-    "xr-modal.ok": "OK"
+    "xr-modal.ok": "OK",
+    "vr-prompt.loading": "Chargement…",
+    "vr-prompt.enter": "Touchez pour entrer en RV",
+    "xr-menu.exit-vr": "Quitter la VR",
+    "xr-menu.exit-ar": "Quitter l'AR",
+    "xr-menu.ice-cream": "Mode glace",
+    "xr-hint.place": "Pincez, pointez le sol ou une table, puis relâchez",
+    "xr-hint.place-controller": "Maintenez la gâchette, pointez le sol ou une table, puis relâchez",
+    "xr-hint.place-screen": "Touchez le sol ou une table pour placer, deux doigts pour redimensionner et pivoter",
+    "xr-hint.stalled": "Rien ne se passe ? Changez d'onglet puis revenez."
 }

@@ -16,6 +16,14 @@ class WorkBufferSplatSource implements SplatSource {
         this.workBuffer = manager.world.workBuffer;
     }
 
+    suspend() {
+        // the engine keeps filling the work buffer for this source; nothing to undo
+    }
+
+    frameEnd() {
+        // nothing of the engine's is released on this path
+    }
+
     readChunk(bindingBase: number) {
         const format = this.require().format;
         // the engine's declarations bind one texture per stream from bindingBase and define
@@ -29,6 +37,8 @@ fn srcOpacity() -> f32 { return getOpacity(); }
 fn srcRotation() -> vec4f { return getRotation(); }
 fn srcScale() -> vec3f { return getScale(); }
 fn srcColor() -> vec3f { return getColor(); }
+// the training mode the engine stamps on each splat it copies (the low bit of its centre)
+fn srcAntiAlias() -> bool { return getAntiAlias(); }
 `;
     }
 

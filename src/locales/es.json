@@ -67,5 +67,14 @@
     "xr-modal.title": "Se requiere WebGL",
     "xr-modal.message": "AR y VR no son compatibles con el renderizador WebGPU. Al pulsar OK se recargará el visor con WebGL.",
     "xr-modal.cancel": "Cancelar",
-    "xr-modal.ok": "OK"
+    "xr-modal.ok": "OK",
+    "vr-prompt.loading": "Cargando…",
+    "vr-prompt.enter": "Toca para entrar en RV",
+    "xr-menu.exit-vr": "Salir de VR",
+    "xr-menu.exit-ar": "Salir de AR",
+    "xr-menu.ice-cream": "Modo helado",
+    "xr-hint.place": "Pellizca, apunta al suelo o a una mesa y suelta",
+    "xr-hint.place-controller": "Mantén el gatillo, apunta al suelo o a una mesa y suelta",
+    "xr-hint.place-screen": "Toca el suelo o una mesa para colocar, dos dedos para escalar y rotar",
+    "xr-hint.stalled": "¿No pasa nada? Cambia de pestaña y vuelve."
 }

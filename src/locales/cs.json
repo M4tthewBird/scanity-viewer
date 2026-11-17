@@ -1,5 +1,10 @@
 {
     "settings.performance-mode": "Výkonnostní režim",
+    "settings.quality": "Kvalita",
+    "settings.quality-performance": "Výkon",
+    "settings.quality-default": "Výchozí",
+    "settings.quality-high": "Vysoká",
+    "settings.quality-max": "Maximální",
     "settings.gaming-controls": "Herní ovládání",
     "settings.show-annotations": "Zobrazit poznámky",
     "settings.show-collision": "Zobrazit kolize",
@@ -62,5 +67,14 @@
     "xr-modal.title": "Vyžadováno WebGL",
     "xr-modal.message": "AR a VR nejsou podporovány s vykreslovačem WebGPU. Stisknutím OK prohlížeč znovu načte s WebGL.",
     "xr-modal.cancel": "Zrušit",
-    "xr-modal.ok": "OK"
+    "xr-modal.ok": "OK",
+    "vr-prompt.loading": "Načítání…",
+    "vr-prompt.enter": "Klepnutím vstoupíte do VR",
+    "xr-menu.exit-vr": "Ukončit VR",
+    "xr-menu.exit-ar": "Ukončit AR",
+    "xr-menu.ice-cream": "Režim kornoutu",
+    "xr-hint.place": "Štípněte prsty, namiřte na podlahu nebo stůl a pak pusťte",
+    "xr-hint.place-controller": "Podržte spoušť, namiřte na podlahu nebo stůl a pak pusťte",
+    "xr-hint.place-screen": "Klepnutím na podlahu nebo stůl scénu umístíte, dvěma prsty ji zvětšíte a otočíte",
+    "xr-hint.stalled": "Nic se neděje? Přepněte na jinou kartu a zpět."
 }

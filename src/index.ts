@@ -17,14 +17,17 @@ import { App } from './app';
 import { MeshCollision, loadVoxelCollision } from './collision';
 import type { Collision } from './collision';
 import { observe } from './core/observe';
+import { loadGsaf } from './gsaf/gsaf-player';
 import { initLocalization } from './localization';
 import type { CreateViewerOptions } from './options';
 import { persistPreferences, readPreferences } from './preferences';
+import { canvasPixelRatio, Quality, resolutionScaleFor } from './quality';
 import { importSettings } from './settings';
 import type { Config, Global, State, ViewerHandle } from './types';
 import { initPoster, initUI } from './ui';
 import uiHtml from './ui.html';
 import { Viewer } from './viewer';
+import { registerZstdDecoder } from './zstd-decoder';
 import { version as appVersion } from '../package.json';
 
 // The filename's extension selects the gsplat parser, so a url with no usable name (a data:
@@ -33,15 +36,25 @@ import { version as appVersion } from '../package.json';
 const contentName = (contentUrl: string, contentFilename?: string | null) =>
     contentFilename || new URL(contentUrl, location.href).pathname.split('/').pop();
 
-// Whether a prefetched response for this content is worth starting. The engine's octree parser
-// fetches lod-meta.json itself and ignores `asset.file.contents`, so prefetching it downloads
-// the metadata twice — a quarter of a megabyte on a real scene, served with no cache-control
-// header, so the second request is not a cache hit. Every other splat parser consumes the
-// prefetched response, so they keep the head start. `src/index.html` applies the same rule when
-// it starts its own prefetch, and docs/streaming-progress.md covers the engine fix that would
-// let the octree path reuse the response instead of opting out of it.
-const isPrefetchable = (contentUrl: string, contentFilename?: string | null) =>
-    contentName(contentUrl, contentFilename)?.toLowerCase() !== 'lod-meta.json';
+// Whether a prefetched response for this content is worth starting. The engine's octree and lcc2
+// parsers fetch lod-meta.json and .lcc2 files themselves and ignore `asset.file.contents`, so
+// prefetching them downloads the metadata twice — a quarter of a megabyte on a real scene,
+// served with no cache-control header, so the second request is not a cache hit. The spz parser
+// takes `asset.file.contents` only as an ArrayBuffer, not the prefetched response, so it fetches
+// its file itself too, which keeps the download progress (`loadGsplat` reads a response the
+// caller passes to an ArrayBuffer). Every other splat parser consumes the prefetched response, so they keep
+// the head start. `src/index.html` applies the same rule when it starts its own prefetch, and
+// docs/streaming-progress.md covers the engine fix that would let the octree path reuse the
+// response instead of opting out of it.
+const isPrefetchable = (contentUrl: string, contentFilename?: string | null) => {
+    const name = contentName(contentUrl, contentFilename)?.toLowerCase();
+    return name !== 'lod-meta.json' && !name?.endsWith('.lcc2') && !name?.endsWith('.spz');
+};
+
+// gsaf is an animated splat sequence, which the viewer decodes and plays itself rather than
+// through an engine parser
+const isGsaf = (contentUrl: string, contentFilename?: string | null) =>
+    contentName(contentUrl, contentFilename)?.toLowerCase().endsWith('.gsaf');
 
 const loadGsplat = async (
     app: AppBase,
@@ -50,13 +63,19 @@ const loadGsplat = async (
     cancelled: () => boolean
 ) => {
     const { contents, contentUrl, contentFilename } = config;
-    const c = contents as unknown as ArrayBuffer;
     const filename = contentName(contentUrl, contentFilename);
-    const data = filename.toLowerCase() === 'meta.json' ? await (await contents).json() : undefined;
+    const name = filename.toLowerCase();
+    const data = name === 'meta.json' ? await (await contents).json() : undefined;
+    // The spz parser reads `asset.file.contents` only as an ArrayBuffer, so a fetch the caller
+    // started is read to one here (the viewer starts none for spz, see `isPrefetchable`)
+    const c = (name.endsWith('.spz') && contents
+        ? await (await contents).arrayBuffer()
+        : contents) as unknown as ArrayBuffer;
 
-    // Reading that metadata spans a network round trip, so a destroy can land in the middle of
-    // it. `app.destroy()` nulls the asset registry, so registering the asset now would throw
-    // from the engine's internals; reject instead, which the viewer's load chains expect.
+    // Reading that metadata or those bytes spans a network round trip, so a destroy can land in
+    // the middle of it. `app.destroy()` nulls the asset registry, so registering the asset now
+    // would throw from the engine's internals; reject instead, which the viewer's load chains
+    // expect.
     if (cancelled()) {
         throw new Error('loadGsplat: the viewer was destroyed while loading');
     }
@@ -68,7 +87,12 @@ const loadGsplat = async (
             // always name the app: the engine's default is the most recently created one,
             // which is another viewer's when two share a page
             const entity = new Entity('gsplat', app);
-            entity.setLocalEulerAngles(0, 0, 180);
+            // LCC2 scenes are stored +Z up, spz files +Y up, the other formats -Y up
+            if (name.endsWith('.lcc2')) {
+                entity.setLocalEulerAngles(270, 0, 0);
+            } else if (!name.endsWith('.spz')) {
+                entity.setLocalEulerAngles(0, 0, 180);
+            }
             entity.addComponent('gsplat', {
                 unified: true,
                 asset
@@ -159,10 +183,14 @@ const createApp = async (canvas: HTMLCanvasElement, config: Config) => {
         keyboard: new Keyboard(window)
     });
 
-    // The stochastic renderer never sorts on the cpu, so the per-splat centres the engine
-    // reads back for its cpu sort (12 bytes each, plus a gpu readback per file) are dead
-    // weight. Read once per file at load, so it has to be set before any asset loads.
-    if (config.stochastic && renderer === 'webgpu') {
+    registerZstdDecoder(config.zstdDecoderUrl);
+
+    // The per-splat centres the engine reads back for its cpu sort (12 bytes each, plus a gpu
+    // readback per file) serve only that sort and non-unified rendering. On WebGPU the viewer
+    // renders unified, and neither renderer sorts on the cpu (the engine's sorts on the gpu, the
+    // stochastic renderer does not sort), so they are dead weight there. Read once per file at
+    // load, so it has to be set before any asset loads; WebGL's cpu sort keeps them
+    if (renderer === 'webgpu') {
         app.scene.gsplatCentersEnabled = false;
     }
 
@@ -200,21 +228,17 @@ const measureCanvas = (canvas: HTMLCanvasElement) => ({
 });
 
 // size the canvas backbuffer from a css size: scaled by the pixel ratio (capped to
-// limit resolution on high-DPI devices), halved in performance mode. a zero css size
-// (hidden canvas) is skipped — the canvas keeps its previous size, as a zero-sized
-// swap chain is invalid in webgpu.
+// limit resolution on high-DPI devices) and the quality module's resolution scale (half at
+// the Performance position on the sorted renderer). a zero css size (hidden canvas) is skipped — the canvas keeps
+// its previous size, as a zero-sized swap chain is invalid in webgpu.
 const resizeCanvas = (
     canvas: HTMLCanvasElement,
     cssSize: { width: number; height: number },
-    performanceMode: boolean
+    resolutionScale: number
 ) => {
     if (!cssSize.width || !cssSize.height) return;
 
-    // maximum pixel dimension we will allow along the shortest screen dimension based on platform
-    const maxPixelDim = platform.mobile ? 1080 : 2160;
-    const pixelRatio = Math.min(maxPixelDim / Math.min(screen.width, screen.height), window.devicePixelRatio);
-
-    const scale = pixelRatio * (performanceMode ? 0.5 : 1.0);
+    const scale = canvasPixelRatio() * resolutionScale;
     const width = Math.ceil(cssSize.width * scale);
     const height = Math.ceil(cssSize.height * scale);
     if (width !== canvas.width || height !== canvas.height) {
@@ -225,7 +249,7 @@ const resizeCanvas = (
 
 // initialize canvas size and resizing
 const initCanvas = (global: Global) => {
-    const { app, events, state } = global;
+    const { app, events, quality } = global;
     const { canvas } = app.graphicsDevice;
 
     // the canvas css size, kept current by the resize observer. measured directly at
@@ -237,7 +261,7 @@ const initCanvas = (global: Global) => {
         // and resetting canvas dimensions can invalidate the XRWebGLLayer
         if (app.xr?.active) return;
 
-        resizeCanvas(canvas, cssSize, state.performanceMode);
+        resizeCanvas(canvas, cssSize, quality.resolutionScale);
     };
 
     const resizeObserver = new ResizeObserver((entries: ResizeObserverEntry[]) => {
@@ -251,7 +275,7 @@ const initCanvas = (global: Global) => {
     });
     resizeObserver.observe(canvas);
 
-    events.on('performanceMode:changed', () => {
+    events.on('quality:changed', () => {
         app.renderNextFrame = true;
     });
 
@@ -278,6 +302,8 @@ const resolveConfig = (options: CreateViewerOptions): Config => ({
     posterUrl: options.posterUrl,
     skyboxUrl: options.skyboxUrl,
     collisionUrl: options.collisionUrl,
+    gsafDecoderUrl: options.gsafDecoderUrl,
+    zstdDecoderUrl: options.zstdDecoderUrl,
     poster: options.poster ?? (options.posterUrl ? createImage(options.posterUrl) : undefined),
     contents:
         options.contents ??
@@ -291,11 +317,21 @@ const resolveConfig = (options: CreateViewerOptions): Config => ({
     ministats: options.ministats ?? false,
     colorize: options.colorize ?? false,
     fullload: options.fullload ?? false,
-    aa: options.aa ?? false,
+    vr: options.vr ?? false,
+    aa: options.aa,
     stochastic: options.stochastic ?? false,
-    splatSource: options.splatSource ?? 'workbuffer',
-    variant: options.variant ?? '',
+    // the direct source reads the engine's own splat files, not the container a gsaf sequence
+    // plays through; the work buffer source reads whatever the engine copied
+    splatSource: isGsaf(options.contentUrl, options.contentFilename) ? 'workbuffer' : (options.splatSource ?? 'direct'),
+    // The stochastic renderer's temporal passes assume splats move only with the camera: an
+    // animated sequence would ghost in the accumulation, and the occlusion cull, which forgets the
+    // previous frame's depth only when a node goes away, would test a frame against the one before
+    // it, which keeps its allocation. An explicit variant still overrides both
+    variant: isGsaf(options.contentUrl, options.contentFilename)
+        ? `taa:off,cull:off,${options.variant ?? ''}`
+        : (options.variant ?? ''),
     budget: options.budget,
+    framesInFlight: options.framesInFlight ?? 2,
     heatmap: options.heatmap ?? false,
     debug: options.debug ?? false,
     lang: options.lang,
@@ -339,8 +375,10 @@ const createViewer = async (options: CreateViewerOptions): Promise<ViewerHandle>
     // size the canvas backbuffer before the graphics device is created, so the swap
     // chain and any backbuffer-sized resources start at the correct resolution instead
     // of being recreated on the first frame's resize. a hidden embed keeps the default
-    // canvas size here; the resize observer sizes it on reveal
-    resizeCanvas(canvas, measureCanvas(canvas), preferences.performanceMode);
+    // canvas size here; the resize observer sizes it on reveal. Whether the stochastic renderer
+    // draws is only known once the device exists, so this guesses from the flag and the setting
+    const stochastic = config.stochastic === 'off' ? false : config.stochastic !== false || preferences.performanceMode;
+    resizeCanvas(canvas, measureCanvas(canvas), resolutionScaleFor(preferences.quality, stochastic));
 
     const { app, camera, renderer } = await createApp(canvas, config);
 
@@ -350,10 +388,12 @@ const createViewer = async (options: CreateViewerOptions): Promise<ViewerHandle>
     const state = observe<State>(events, {
         loaded: false,
         ...preferences,
+        qualityAvailable: [],
         progress: 0,
         inputMode: platform.mobile ? 'touch' : 'desktop',
         cameraMode: 'orbit',
         hasAnimation: false,
+        hasSequence: false,
         animationDuration: 0,
         animationTime: 0,
         animationPaused: true,
@@ -372,6 +412,10 @@ const createViewer = async (options: CreateViewerOptions): Promise<ViewerHandle>
         inputEnabled: true
     });
 
+    // the budget, renderer and resolution decisions, from the Quality slider and the Performance
+    // Mode setting and the device class
+    const quality = new Quality(app, config, state, events, renderer);
+
     const global: Global = {
         app,
         settings: importSettings(settingsJson),
@@ -381,7 +425,8 @@ const createViewer = async (options: CreateViewerOptions): Promise<ViewerHandle>
         camera,
         renderer,
         root,
-        localize
+        localize,
+        quality
     };
 
     const disposeCanvas = initCanvas(global);
@@ -395,15 +440,27 @@ const createViewer = async (options: CreateViewerOptions): Promise<ViewerHandle>
     // this before touching the app
     let destroyed = false;
 
-    // Load model
-    const gsplatLoad = loadGsplat(
-        app,
-        config,
-        (progress: number) => {
-            state.progress = progress;
-        },
-        () => destroyed
-    );
+    // Load model: a gsaf sequence plays through its own player, which the viewer's timeline drives
+    const onProgress = (progress: number) => {
+        state.progress = progress;
+    };
+    // aborted by the viewer's destroy, which lets a gsaf load release its worker mid-wait
+    const loading = new AbortController();
+    const sequenceLoad = isGsaf(config.contentUrl, config.contentFilename)
+        ? loadGsaf(
+              app,
+              config.contents ?? fetch(config.contentUrl),
+              config.gsafDecoderUrl,
+              onProgress,
+              loading.signal
+          ).catch((err: Error) => {
+              if (!destroyed) console.log(err);
+              throw err;
+          })
+        : null;
+    const gsplatLoad = sequenceLoad
+        ? sequenceLoad.then((player) => player.entity)
+        : loadGsplat(app, config, onProgress, () => destroyed);
 
     // Load skybox (continue without if it fails — e.g. CORS, 404)
     const skyboxLoad =
@@ -454,8 +511,9 @@ const createViewer = async (options: CreateViewerOptions): Promise<ViewerHandle>
     }
 
     // Create the viewer
-    const viewer = new Viewer(global, gsplatLoad, skyboxLoad, collisionLoad);
+    const viewer = new Viewer(global, gsplatLoad, skyboxLoad, collisionLoad, sequenceLoad);
     viewer.onDestroy(persistPreferences(events));
+    viewer.onDestroy(() => quality.destroy());
     const handle: ViewerHandle = {
         app,
         state,
@@ -486,6 +544,7 @@ const createViewer = async (options: CreateViewerOptions): Promise<ViewerHandle>
         : null;
     viewer.onDestroy(() => {
         destroyed = true;
+        loading.abort();
     });
     viewer.onDestroy(disposeCanvas);
     if (disposeUI) {
@@ -502,5 +561,5 @@ console.log(`SuperSplat Viewer v${appVersion} | Engine v${engineVersion} (${engi
 
 export type { CaptureResult } from './capture';
 export type { CreateViewerOptions, ViewerAssets, ViewerFlags } from './options';
-export type { CaptureOptions, ViewerHandle, ViewerState, XrMode } from './types';
+export type { CaptureOptions, QualityLevel, ViewerHandle, ViewerState, XrMode } from './types';
 export { createViewer };

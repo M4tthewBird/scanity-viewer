@@ -28,6 +28,19 @@ type ViewerAssets = {
     skyboxUrl?: string;
     /** Collision data url, for walk mode. A `.glb` is treated as a mesh, otherwise voxels. */
     collisionUrl?: string;
+    /**
+     * The gsaf decoder's wasm, fetched only when the content is a `.gsaf` file. Defaults to the
+     * `gsaf-decoder.wasm` shipped beside the viewer's bundle. A document with no sibling files
+     * (an inlined bundle) sets it to the `data:` url the `@playcanvas/supersplat-viewer/gsaf-decoder`
+     * export provides.
+     */
+    gsafDecoderUrl?: string;
+    /**
+     * The ZSTD decoder's wasm, fetched only when a version 4 `.spz` file loads, on its own or as
+     * a chunk of an `.lcc2` scene. Defaults to the `zstd-decoder.wasm` shipped beside the viewer's
+     * bundle. A document with no sibling files (an inlined bundle) sets it to a `data:` url.
+     */
+    zstdDecoderUrl?: string;
 };
 
 /** Per-instance switches. Every one is optional and off unless stated. */
@@ -60,26 +73,48 @@ type ViewerFlags = {
     colorize?: boolean;
     /** Load all streaming LOD data before the first frame. */
     fullload?: boolean;
-    /** Render with antialiasing. */
+    /**
+     * Offer VR at once: where VR can start, a prompt shows over the viewer while it loads, and a
+     * tap on it starts a VR session as soon as the scene is placed, the rest of the scene streaming
+     * in during the session; a tap elsewhere dismisses it. A session needs a tap: browsers start
+     * none without one. The camera animation starts paused, as with `noanim`. Needs the ui.
+     * Defaults to `false`.
+     */
+    vr?: boolean;
+    /**
+     * Override the anti-aliasing compensation that splats trained with anti-aliasing need: `true`
+     * renders every splat with it, `false` without. When not set, the engine follows the training
+     * mode each splat file records (PlayCanvas Engine 2.24 and later).
+     */
     aa?: boolean;
     /**
-     * Opt in to the experimental stochastic splat renderer: unsorted, depth-tested splats whose
-     * depth buffer also serves picking. WebGPU only; ignored on WebGL and while an XR session is
-     * active, where the engine's sorted renderer draws. Fixed for the life of the viewer.
+     * Developer override of the Performance Mode setting: `true` forces the stochastic splat
+     * renderer (unsorted, depth-tested splats whose depth buffer also serves picking) in its
+     * per-pixel mode, `'mobile'` in its interleaved-pixel-sets mode, and `'off'` keeps the
+     * engine's sorted renderer; each hides the setting. Without it the user's Performance Mode
+     * toggle decides, and the device class picks the mode. WebGPU only; ignored on WebGL. The
+     * renderer draws WebGPU XR sessions too, one view per eye (Safari on Apple Vision Pro); where
+     * only WebGL could host a session, the viewer offers a reload into WebGL.
      */
-    stochastic?: boolean;
+    stochastic?: boolean | 'mobile' | 'off';
     /**
      * Developer knob for the stochastic renderer: the data path that feeds it. Default
-     * `workbuffer`, the engine's work buffer.
+     * `direct`, the resident files read in place; `workbuffer` reads the engine's work buffer.
      */
-    splatSource?: 'workbuffer' | 'direct' | 'light';
+    splatSource?: 'workbuffer' | 'direct';
     /**
      * Developer knob for the stochastic renderer: comma-separated `key:value` experiment
-     * switches, e.g. `spp:1,compose:none`.
+     * switches applied over the chosen mode's, e.g. `coverage:interleaved,jitter:2`.
      */
     variant?: string;
-    /** Splat budget in millions, overriding the platform and performance-mode table. */
+    /** Splat budget in millions, overriding the Quality slider's ladder (every position then gives it). */
     budget?: number;
+    /**
+     * Developer knob: while the viewer renders on demand, the most rendered frames the gpu may
+     * have unfinished before the next continuous render (the camera moving, the stochastic
+     * renderer accumulating) waits for one to finish; `0` lets them queue. Defaults to `2`.
+     */
+    framesInFlight?: number;
     /** Render the collision heatmap debug overlay (WebGPU only). */
     heatmap?: boolean;
     /** Open the developer debug panel on load; Ctrl+Shift+D toggles it either way. */
